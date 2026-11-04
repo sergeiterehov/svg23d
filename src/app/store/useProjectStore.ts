@@ -75,6 +75,9 @@ interface Snapshot {
 
 let client: GeometryClient | null = null;
 let rebuildTimer: ReturnType<typeof setTimeout> | null = null;
+/** A build is running in the worker; `rebuildQueued` collapses all newer requests into one. */
+let buildInFlight = false;
+let rebuildQueued = false;
 let lastCommit: { key: string; time: number } | null = null;
 
 function getClient(): GeometryClient {
@@ -448,11 +451,30 @@ function scheduleRebuild(set: SetState, get: GetState, delay: number): void {
   if (rebuildTimer) clearTimeout(rebuildTimer);
   rebuildTimer = setTimeout(() => {
     rebuildTimer = null;
+    // Only one job may run at a time: while the worker is busy, newer requests collapse into a
+    // single pending rebuild that starts as soon as the current one finishes.
+    if (buildInFlight) {
+      rebuildQueued = true;
+      return;
+    }
     void runRebuild(set, get);
   }, delay);
 }
 
 async function runRebuild(set: SetState, get: GetState): Promise<void> {
+  buildInFlight = true;
+  try {
+    await performRebuild(set, get);
+  } finally {
+    buildInFlight = false;
+    if (rebuildQueued) {
+      rebuildQueued = false;
+      void runRebuild(set, get);
+    }
+  }
+}
+
+async function performRebuild(set: SetState, get: GetState): Promise<void> {
   const project = get().project;
   if (!project) return;
 
