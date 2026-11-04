@@ -14,7 +14,8 @@ export interface ViewOptions {
 export const DEFAULT_VIEW: ViewOptions = { material: 'matte', lighting: 'studio' };
 
 export interface ViewerHandle {
-  setParts: (parts: PartMesh[]) => void;
+  /** `frame: true` re-frames the camera; by default the current view is preserved. */
+  setParts: (parts: PartMesh[], options?: { frame?: boolean }) => void;
   /** Highlights one part with a light-blue outline; `null` clears the selection. */
   setSelectedPart: (partId: string | null) => void;
   /** Material/lighting presets; does not rebuild geometry. */
@@ -249,7 +250,8 @@ export function createViewer(container: HTMLElement, options: ViewerOptions = {}
   };
 
   return {
-    setParts(parts) {
+    setParts(parts, partOptions) {
+      const wasEmpty = partsGroup.children.length === 0;
       disposeParts();
       let extent = 20;
       for (const part of parts) {
@@ -281,7 +283,9 @@ export function createViewer(container: HTMLElement, options: ViewerOptions = {}
         }
       }
       updateGrid(extent * 1.4);
-      frameAll();
+      // Re-frame only for the first model or when the document itself changed; otherwise the
+      // user's camera must survive every settings change and rebuild.
+      if (wasEmpty || partOptions?.frame) frameAll();
       applySelection();
     },
     setSelectedPart(partId) {

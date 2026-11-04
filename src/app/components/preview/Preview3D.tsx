@@ -13,6 +13,8 @@ export function Preview3D() {
   const project = useProjectStore((s) => s.project);
   const material = useProjectStore((s) => s.project?.global.view.material ?? 'matte');
   const lighting = useProjectStore((s) => s.project?.global.view.lighting ?? 'studio');
+  const documentHash = useProjectStore((s) => s.project?.document.hash ?? null);
+  const framedHashRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -28,8 +30,11 @@ export function Preview3D() {
   }, [select]);
 
   useEffect(() => {
-    viewerRef.current?.setParts(result?.parts ?? []);
-  }, [result]);
+    // Frame the camera only when the document changes, so a rebuild never jumps the view.
+    const shouldFrame = framedHashRef.current !== documentHash;
+    framedHashRef.current = documentHash;
+    viewerRef.current?.setParts(result?.parts ?? [], { frame: shouldFrame });
+  }, [result, documentHash]);
 
   const selectedPartId = useMemo(
     () => (project ? partIdForSelection(project.document.root, leaves, selectedId) : null),

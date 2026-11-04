@@ -106,15 +106,6 @@ function ElementPanel({ node }: { node: SvgDocNode }) {
 
             <div className="grid grid-cols-2 gap-2">
               <NumberField
-                label="Фаска снизу"
-                value={own.chamferBottom}
-                inheritedValue={effective.chamferBottom}
-                step={0.1}
-                min={0}
-                hint="Снятие фаски под 45° на нижней грани"
-                onChange={(value) => updateSettings(node.id, { chamferBottom: value })}
-              />
-              <NumberField
                 label="Фаска сверху"
                 value={own.chamferTop}
                 inheritedValue={effective.chamferTop}
@@ -122,6 +113,15 @@ function ElementPanel({ node }: { node: SvgDocNode }) {
                 min={0}
                 hint="Снятие фаски под 45° на верхней грани"
                 onChange={(value) => updateSettings(node.id, { chamferTop: value })}
+              />
+              <NumberField
+                label="Фаска снизу"
+                value={own.chamferBottom}
+                inheritedValue={effective.chamferBottom}
+                step={0.1}
+                min={0}
+                hint="Снятие фаски под 45° на нижней грани"
+                onChange={(value) => updateSettings(node.id, { chamferBottom: value })}
               />
             </div>
 
