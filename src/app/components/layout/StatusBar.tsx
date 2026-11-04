@@ -43,7 +43,7 @@ export function StatusBar() {
               ? 'Построение модели…'
               : modelSize
                 ? `Модель ${round(modelSize.widthMm)} × ${round(modelSize.heightMm)} мм`
-                : 'Файл не загружен'}
+                : 'Проект пуст'}
           </span>
         )}
 
@@ -64,7 +64,7 @@ export function StatusBar() {
           <IconButton
             label="Пересчитать модель"
             onClick={rebuild}
-            disabled={!project}
+            disabled={!project || status === 'empty'}
             className="h-6 w-6 hover:bg-slate-800 hover:text-slate-100"
           >
             <ResetIcon className="h-3.5 w-3.5" />

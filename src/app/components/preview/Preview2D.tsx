@@ -35,7 +35,7 @@ export function Preview2D() {
   const mode = useProjectStore((s) => s.project?.global.view.mode2d ?? 'transparent');
 
   if (!project) {
-    return <div className="grid h-full place-items-center text-sm text-slate-500">Нет модели</div>;
+    return <div className="h-full w-full" />;
   }
 
   const { viewBox, root } = project.document;

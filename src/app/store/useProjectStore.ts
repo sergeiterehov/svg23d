@@ -19,6 +19,7 @@ import {
   serializeProject,
 } from '@core/model/project';
 import { parseSvg, SvgParseError } from '@core/svg/parseSvg';
+import { createEmptyDocument, createEmptyProject, isEmptyDocument } from '@core/model/empty';
 import { resolveLeaves, findPartRoots, type PartInfo } from '@core/solver/resolveLeaves';
 import { findParent, shiftChildOrder } from '@core/solver/order';
 import { writeThreeMf } from '@core/export/threemf';
@@ -121,7 +122,7 @@ interface AppState {
 }
 
 export const useProjectStore = create<AppState>()((set, get) => ({
-  project: null,
+  project: createEmptyProject(),
   leaves: [],
   parts: [],
   modelSize: null,
@@ -138,14 +139,17 @@ export const useProjectStore = create<AppState>()((set, get) => ({
 
   loadSvgText: (text, fileName) => {
     try {
-      const document = parseSvg(text, { fileName, global: DEFAULT_GLOBAL_SETTINGS });
+      // Project defaults set before the import survive it: they describe the machine and the
+      // material, not the document.
+      const global = { ...get().project?.global ?? DEFAULT_GLOBAL_SETTINGS };
+      const document = parseSvg(text, { fileName, global });
       const project: Project = {
         version: PROJECT_VERSION,
         fileName,
         source: text,
         document,
         settings: {},
-        global: { ...DEFAULT_GLOBAL_SETTINGS },
+        global,
       };
       lastCommit = null;
       set({
@@ -154,7 +158,7 @@ export const useProjectStore = create<AppState>()((set, get) => ({
         hoveredId: null,
         result: null,
         error: null,
-        status: 'building',
+        status: isEmptyDocument(document) ? 'empty' : 'building',
         past: [],
         future: [],
       });
@@ -162,14 +166,17 @@ export const useProjectStore = create<AppState>()((set, get) => ({
     } catch (error) {
       const message =
         error instanceof SvgParseError ? error.message : `Не удалось прочитать файл: ${String(error)}`;
-      set({ status: 'error', error: message, project: null, result: null });
+      // Keep the current project: a broken file must not throw away the work in progress.
+      set({ status: 'error', error: message });
     }
   },
 
   openProject: (text) => {
     try {
       const file = parseProjectFile(text);
-      const document = parseSvg(file.source, { fileName: file.fileName, global: file.global });
+      const document = file.source.trim()
+        ? parseSvg(file.source, { fileName: file.fileName, global: file.global })
+        : createEmptyDocument(file.fileName);
       const project: Project = {
         version: PROJECT_VERSION,
         fileName: file.fileName,
@@ -185,7 +192,7 @@ export const useProjectStore = create<AppState>()((set, get) => ({
         hoveredId: null,
         result: null,
         error: null,
-        status: 'building',
+        status: isEmptyDocument(document) ? 'empty' : 'building',
         past: [],
         future: [],
       });
@@ -303,7 +310,8 @@ export const useProjectStore = create<AppState>()((set, get) => ({
     if (!project) return;
     pushHistory(set, get, `global:${Object.keys(patch).sort().join(',')}`);
     set({ project: { ...project, global: { ...project.global, ...patch } } });
-    scheduleRebuild(set, get, REBUILD_DEBOUNCE_MS);
+    // Nothing to rebuild while the document is empty; the values apply to the next import.
+    if (!isEmptyDocument(project.document)) scheduleRebuild(set, get, REBUILD_DEBOUNCE_MS);
   },
 
   updateView: (patch) => {
@@ -340,7 +348,7 @@ export const useProjectStore = create<AppState>()((set, get) => ({
 
   reset: () => {
     set({
-      project: null,
+      project: createEmptyProject(),
       leaves: [],
       parts: [],
       modelSize: null,
@@ -391,6 +399,20 @@ function scheduleRebuild(set: SetState, get: GetState, delay: number): void {
 async function runRebuild(set: SetState, get: GetState): Promise<void> {
   const project = get().project;
   if (!project) return;
+
+  // Empty project: nothing to resolve, and the units of an empty document are meaningless.
+  if (isEmptyDocument(project.document)) {
+    set({
+      leaves: [],
+      parts: [],
+      warnings: [],
+      modelSize: null,
+      result: null,
+      status: 'empty',
+      error: null,
+    });
+    return;
+  }
 
   const resolved = resolveLeaves({
     document: project.document,

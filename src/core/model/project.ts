@@ -53,7 +53,7 @@ export function parseProjectFile(text: string): ProjectFile {
       `Версия проекта ${String(candidate.version)} не поддерживается (максимум ${PROJECT_VERSION})`,
     );
   }
-  if (typeof candidate.source !== 'string' || candidate.source.length === 0) {
+  if (typeof candidate.source !== 'string') {
     throw new Error('В файле проекта нет исходного SVG');
   }
   if (!candidate.global || typeof candidate.global !== 'object') {

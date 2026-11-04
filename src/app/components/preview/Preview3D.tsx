@@ -57,11 +57,6 @@ export function Preview3D() {
     <div className="relative h-full w-full">
       <div ref={containerRef} className="h-full w-full" />
       <div ref={navCubeRef} className="absolute bottom-3 right-3 z-10 h-[96px] w-[96px]" />
-      {!result && (
-        <div className="pointer-events-none absolute inset-0 grid place-items-center text-sm text-slate-500">
-          Модель ещё не построена
-        </div>
-      )}
     </div>
   );
 }

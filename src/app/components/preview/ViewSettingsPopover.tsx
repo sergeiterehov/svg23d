@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import clsx from 'clsx';
 import { useProjectStore } from '../../store/useProjectStore';
+import { DEFAULT_GLOBAL_SETTINGS } from '@core/model/defaults';
 import type { ViewSettings } from '@core/model/types';
 import { SelectField } from '../common/Select';
 import { SlidersIcon, XIcon } from '../common/Icon';
@@ -11,7 +12,7 @@ import { IconButton } from '../common/IconButton';
  * settings panel. The popover closes with its own ✕ (and on Escape / outside click).
  */
 export function ViewSettingsPopover() {
-  const project = useProjectStore((s) => s.project);
+  const view = useProjectStore((s) => s.project?.global.view) ?? DEFAULT_GLOBAL_SETTINGS.view;
   const updateView = useProjectStore((s) => s.updateView);
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -31,9 +32,6 @@ export function ViewSettingsPopover() {
       document.removeEventListener('keydown', onKeyDown);
     };
   }, [open]);
-
-  if (!project) return null;
-  const { view } = project.global;
 
   return (
     <div ref={containerRef} className="relative">

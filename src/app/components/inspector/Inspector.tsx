@@ -3,6 +3,7 @@ import { effectiveSettingsFor } from '@core/solver/inheritance';
 import { collectSubtreeIds } from '@core/solver/selection';
 import type { BBox3, LeafStats, ResolvedLeaf, SvgDocNode } from '@core/model/types';
 import { useProjectStore, type BuildResultState } from '../../store/useProjectStore';
+import { isEmptyDocument } from '@core/model/empty';
 import { NumberField } from '../common/NumberField';
 import { ColorChip, Toggle } from '../common/Toggle';
 import { HelpHint } from '../common/Icon';
@@ -15,21 +16,7 @@ import { SelectField } from '../common/Select';
 export function Inspector() {
   const project = useProjectStore((s) => s.project);
   const selectedId = useProjectStore((s) => s.selectedId);
-
-  if (!project) {
-    return (
-      <div className="grid h-full place-items-center p-6 text-center">
-        <div className="space-y-1">
-          <p className="text-xs text-slate-400">Настройки появятся после загрузки SVG</p>
-          <p className="text-[11px] leading-relaxed text-slate-600">
-            Загрузите файл или выберите пример — внизу, в статусбаре.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  const node = selectedId ? findNode(project.document.root, selectedId) : null;
+  const node = project && selectedId ? findNode(project.document.root, selectedId) : null;
 
   return (
     <div className="flex h-full flex-col overflow-y-auto">
@@ -262,7 +249,8 @@ function ProjectPanel() {
         <button
           type="button"
           onClick={distributeZ}
-          className="w-full rounded-md border border-slate-700 px-2 py-1.5 text-[11px] text-slate-300 hover:border-slate-500 hover:text-white"
+          disabled={isEmptyDocument(project.document)}
+          className="w-full rounded-md border border-slate-700 px-2 py-1.5 text-[11px] text-slate-300 transition hover:border-slate-500 hover:text-white disabled:cursor-not-allowed disabled:border-slate-800 disabled:text-slate-600 disabled:hover:border-slate-800 disabled:hover:text-slate-600"
           title="Каждой детали — свой диапазон высот с перекрытием 0.5 мм"
         >
           Разложить по слоям
@@ -283,9 +271,7 @@ function StatsPanel() {
   const leaves = useProjectStore((s) => s.leaves);
   const selectedId = useProjectStore((s) => s.selectedId);
 
-  if (!project) return null;
-
-  const node = selectedId ? findNode(project.document.root, selectedId) : null;
+  const node = project && selectedId ? findNode(project.document.root, selectedId) : null;
 
   return (
     <section className="p-3">
@@ -293,8 +279,8 @@ function StatsPanel() {
         Результат
       </h2>
 
-      {!result ? (
-        <p className="mt-2 text-xs text-slate-500">Модель не построена</p>
+      {!result || !project ? (
+        <EmptyStats />
       ) : !node ? (
         <>
           <dl className="mt-2 space-y-1 text-[11px]">
@@ -313,6 +299,19 @@ function StatsPanel() {
         <SelectionStats node={node} result={result} parts={parts} leaves={leaves} />
       )}
     </section>
+  );
+}
+
+/** Same rows as a built model, so the panel keeps its shape before anything is loaded. */
+function EmptyStats() {
+  return (
+    <dl className="mt-2 space-y-1 text-[11px]">
+      <Row label="Деталей" value="—" />
+      <Row label="Треугольников" value="—" />
+      <Row label="Объём" value="—" />
+      <Row label="Габариты" value="—" />
+      <Row label="Время" value="—" />
+    </dl>
   );
 }
 

@@ -6,6 +6,7 @@ import { DEFAULT_GLOBAL_SETTINGS } from '@core/model/defaults';
 import { PROJECT_VERSION } from '@core/model/types';
 import type { NodeSettings, Project } from '@core/model/types';
 import { parseProjectFile, serializeProject } from '@core/model/project';
+import { createEmptyProject, isEmptyDocument } from '@core/model/empty';
 import { parseSvg } from '@core/svg/parseSvg';
 import { resolveLeaves } from '@core/solver/resolveLeaves';
 
@@ -117,5 +118,16 @@ describe('project file', () => {
       /не поддерживается/,
     );
     expect(() => parseProjectFile('{"app":"svg23d","version":1}')).toThrow(/исходного SVG/);
+  });
+
+  it('saves and reopens an empty project', () => {
+    const empty = createEmptyProject();
+    expect(empty.fileName).toBe('Безымянный');
+    expect(isEmptyDocument(empty.document)).toBe(true);
+
+    const file = parseProjectFile(serializeProject(empty));
+    expect(file.fileName).toBe('Безымянный');
+    expect(file.source).toBe('');
+    expect(file.global).toEqual(empty.global);
   });
 });
