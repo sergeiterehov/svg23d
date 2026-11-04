@@ -31,7 +31,7 @@ import {
   EMPTY_TREE_EDIT,
   applyTreeEdit,
   createGroup,
-  moveNodeInTree,
+  moveNodesInTree,
   removeFromTree,
   renameInTree,
   type TreeEdit,
@@ -135,7 +135,7 @@ interface AppState {
   /** Renames an element or a group; empty names are ignored. */
   renameNode: (nodeId: string, name: string) => void;
   /** Drag & drop: puts `nodeId` next to `targetId` or inside it when it is a group. */
-  moveNode: (nodeId: string, targetId: string, position: 'before' | 'after' | 'inside') => void;
+  moveNodes: (nodeIds: string[], targetId: string, position: 'before' | 'after' | 'inside') => void;
   /** Deletes the selected elements and their subtrees. */
   removeSelected: () => void;
   distributeZ: () => void;
@@ -362,19 +362,20 @@ export const useProjectStore = create<AppState>()((set, get) => ({
     scheduleRebuild(set, get, 0);
   },
 
-  moveNode: (nodeId, targetId, position) => {
+  moveNodes: (nodeIds, targetId, position) => {
     const { project } = get();
     if (!project) return;
-    const result = moveNodeInTree(project.document, project.tree, nodeId, targetId, position);
+    const result = moveNodesInTree(project.document, project.tree, nodeIds, targetId, position);
     if (!result) return;
     const parent =
       result.parentId === ''
         ? project.document.root
         : findNode(project.document.root, result.parentId);
     if (!parent) return;
+    const moving = new Set(result.movedIds);
     const siblings = orderedChildren(parent, project.settings)
       .map((child) => child.id)
-      .filter((id) => id !== nodeId);
+      .filter((id) => !moving.has(id));
     const targetIndex = siblings.indexOf(targetId);
     const index =
       position === 'inside' || targetIndex < 0
@@ -383,7 +384,8 @@ export const useProjectStore = create<AppState>()((set, get) => ({
           ? targetIndex
           : targetIndex + 1;
     const order = [...siblings];
-    order.splice(index, 0, nodeId);
+    // The block keeps its internal order (bottom → top).
+    order.splice(index, 0, ...result.movedIds);
 
     pushHistory(set, get, 'move');
     set({

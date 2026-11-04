@@ -7,11 +7,22 @@ function channelSum(color: string): number {
 }
 
 describe('height colour scale', () => {
-  it('goes black → red → yellow → white', () => {
-    expect(heightColor(0)).toBe('rgb(0, 0, 0)');
-    expect(heightColor(1 / 3)).toBe('rgb(255, 26, 26)');
-    expect(heightColor(2 / 3)).toBe('rgb(255, 214, 10)');
-    expect(heightColor(1)).toBe('rgb(255, 255, 255)');
+  it('goes deep navy → azure → pale blue, like water depth', () => {
+    expect(heightColor(0)).toBe('rgb(9, 24, 64)');
+    expect(heightColor(0.35)).toBe('rgb(13, 71, 161)');
+    expect(heightColor(0.7)).toBe('rgb(34, 176, 214)');
+    expect(heightColor(1)).toBe('rgb(198, 235, 255)');
+  });
+
+  it('gets lighter and bluer towards the top', () => {
+    const samples = [0, 0.35, 0.7, 1].map((t) => heightColor(t).match(/\d+/g)!.map(Number));
+    for (let i = 1; i < samples.length; i += 1) {
+      const [r, g, b] = samples[i]!;
+      // Every stop is brighter than the previous one, and blue stays the dominant channel.
+      expect(r + g + b).toBeGreaterThan(samples[i - 1]!.reduce((sum, v) => sum + v, 0));
+      expect(b).toBeGreaterThan(r);
+      expect(b).toBeGreaterThan(g);
+    }
   });
 
   it('interpolates and stays monotonic in brightness', () => {
@@ -22,15 +33,15 @@ describe('height colour scale', () => {
   });
 
   it('clamps out-of-range values', () => {
-    expect(heightColor(-5)).toBe('rgb(0, 0, 0)');
-    expect(heightColor(5)).toBe('rgb(255, 255, 255)');
-    expect(heightColor(Number.NaN)).toBe('rgb(0, 0, 0)');
+    expect(heightColor(-5)).toBe('rgb(9, 24, 64)');
+    expect(heightColor(5)).toBe('rgb(198, 235, 255)');
+    expect(heightColor(Number.NaN)).toBe('rgb(9, 24, 64)');
   });
 
   it('keeps the CSS legend in sync with the stops', () => {
-    expect(HEIGHT_GRADIENT_CSS).toContain('#000000');
-    expect(HEIGHT_GRADIENT_CSS).toContain('#ff1a1a');
-    expect(HEIGHT_GRADIENT_CSS).toContain('#ffd60a');
-    expect(HEIGHT_GRADIENT_CSS).toContain('#ffffff');
+    expect(HEIGHT_GRADIENT_CSS).toContain('#091840');
+    expect(HEIGHT_GRADIENT_CSS).toContain('#0d47a1');
+    expect(HEIGHT_GRADIENT_CSS).toContain('#22b0d6');
+    expect(HEIGHT_GRADIENT_CSS).toContain('#c6ebff');
   });
 });

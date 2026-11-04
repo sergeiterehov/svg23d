@@ -1,18 +1,19 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import clsx from 'clsx';
 import type { SvgDocNode } from '@core/model/types';
 import { effectiveSettingsFor } from '@core/solver/inheritance';
 import { orderedChildren } from '@core/solver/order';
 import { useProjectStore } from '../../store/useProjectStore';
 import { ColorChip } from '../common/Toggle';
-import { EyeIcon, EyeOffIcon } from '../common/Icon';
+import { EyeIcon, EyeOffIcon, FolderIcon } from '../common/Icon';
 import { IconButton } from '../common/IconButton';
 
 /** Where a dragged row lands relative to the row under the pointer. */
 type DropZone = 'before' | 'after' | 'inside';
 
 export interface TreeDrag {
-  id: string;
+  /** Every row the drag carries (a multi-selection moves as one block). */
+  ids: string[];
   over: { id: string; zone: DropZone } | null;
 }
 
@@ -23,11 +24,13 @@ interface TreeUi {
   startEditing: (id: string) => void;
   stopEditing: () => void;
   drag: TreeDrag | null;
-  startDrag: (id: string) => void;
+  startDrag: (ids: string[]) => void;
   setOver: (over: TreeDrag['over']) => void;
   endDrag: () => void;
   rows: string[];
   rowIndex: Map<string, number>;
+  /** Opens the row's context menu at viewport coordinates. */
+  openMenu: (x: number, y: number, nodeId: string) => void;
 }
 
 /** Display order of the rows (top row = drawn last = cuts into everything below, ADR-0004). */
@@ -41,11 +44,12 @@ function flattenRows(node: SvgDocNode, collapsed: Set<string>, out: string[] = [
 
 export function LayerTree() {
   const project = useProjectStore((s) => s.project);
-  const moveNode = useProjectStore((s) => s.moveNode);
+  const moveNodes = useProjectStore((s) => s.moveNodes);
   // Collapsing lives above the rows so Shift-click can work on the rows that are actually visible.
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   const [editingId, setEditingId] = useState<string | null>(null);
   const [drag, setDrag] = useState<TreeDrag | null>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number; nodeId: string } | null>(null);
   /** Last row clicked without Shift: the range starts there. */
   const anchorRef = useRef<string | null>(null);
   const rows = useMemo(
@@ -69,11 +73,18 @@ export function LayerTree() {
     startEditing: setEditingId,
     stopEditing: () => setEditingId(null),
     drag,
-    startDrag: (id) => setDrag({ id, over: null }),
+    startDrag: (ids) => setDrag({ ids, over: null }),
     setOver: (over) => setDrag((current) => (current ? { ...current, over } : current)),
     endDrag: () => setDrag(null),
     rows,
     rowIndex,
+    openMenu: (x, y, nodeId) => {
+      // Right-click on an unselected row selects it first, like every other tree in the world.
+      const state = useProjectStore.getState();
+      if (!state.selectedIds.includes(nodeId)) state.select(nodeId);
+      anchorRef.current = nodeId;
+      setMenu({ x, y, nodeId });
+    },
   };
 
   return (
@@ -85,9 +96,132 @@ export function LayerTree() {
           depth={0}
           ui={ui}
           anchorRef={anchorRef}
-          onDrop={moveNode}
+          onDrop={moveNodes}
         />
       ))}
+      {menu && (
+        <TreeContextMenu
+          x={menu.x}
+          y={menu.y}
+          nodeId={menu.nodeId}
+          onClose={() => setMenu(null)}
+          onRename={() => {
+            ui.startEditing(menu.nodeId);
+            setMenu(null);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+/** Right-click menu of the tree: grouping, renaming and deleting live here, not in the tools menu. */
+function TreeContextMenu({
+  x,
+  y,
+  nodeId,
+  onClose,
+  onRename,
+}: {
+  x: number;
+  y: number;
+  nodeId: string;
+  onClose: () => void;
+  onRename: () => void;
+}) {
+  const groupSelected = useProjectStore((s) => s.groupSelected);
+  const removeSelected = useProjectStore((s) => s.removeSelected);
+  const selectedIds = useProjectStore((s) => s.selectedIds);
+  const ref = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState({ left: x, top: y });
+
+  // Measured first, then clamped to the viewport so the menu is never cut off at an edge.
+  useLayoutEffect(() => {
+    const rect = ref.current?.getBoundingClientRect();
+    if (!rect) return;
+    setPosition({
+      left: Math.min(x, window.innerWidth - rect.width - 8),
+      top: Math.min(y, window.innerHeight - rect.height - 8),
+    });
+  }, [x, y]);
+
+  useEffect(() => {
+    const onPointerDown = (event: MouseEvent): void => {
+      if (!ref.current?.contains(event.target as Node)) onClose();
+    };
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') onClose();
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    window.addEventListener('resize', onClose);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('resize', onClose);
+    };
+  }, [onClose]);
+
+  const item =
+    'flex w-full items-center justify-between gap-6 px-3 py-1.5 text-left text-xs transition';
+  const count = selectedIds.length;
+
+  return (
+    <div
+      ref={ref}
+      role="menu"
+      className="fixed z-50 w-56 overflow-hidden rounded-md border border-slate-700 bg-slate-900 py-1 shadow-xl"
+      style={{ left: position.left, top: position.top }}
+      data-node-menu={nodeId}
+    >
+      <button
+        type="button"
+        role="menuitem"
+        disabled={count === 0}
+        onClick={() => {
+          groupSelected();
+          onClose();
+        }}
+        className={clsx(
+          item,
+          count === 0
+            ? 'cursor-not-allowed text-slate-600'
+            : 'text-slate-200 hover:bg-slate-800 hover:text-white',
+        )}
+      >
+        <span>Сгруппировать{count > 1 ? ` (${count})` : ''}</span>
+        <span className="text-[10px] text-slate-500">⌘G</span>
+      </button>
+      <button
+        type="button"
+        role="menuitem"
+        onClick={() => {
+          onRename();
+        }}
+        className={clsx(item, 'text-slate-200 hover:bg-slate-800 hover:text-white')}
+      >
+        <span>Переименовать</span>
+        <span className="text-[10px] text-slate-500">двойной клик</span>
+      </button>
+      <div className="my-1 border-t border-slate-800" />
+      <button
+        type="button"
+        role="menuitem"
+        disabled={count === 0}
+        onClick={() => {
+          removeSelected();
+          onClose();
+        }}
+        className={clsx(
+          item,
+          count === 0
+            ? 'cursor-not-allowed text-slate-600'
+            : 'text-rose-300 hover:bg-rose-500/15 hover:text-rose-200',
+        )}
+      >
+        <span>Удалить{count > 1 ? ` (${count})` : ''}</span>
+        <span className="text-[10px] text-slate-500">⌫</span>
+      </button>
     </div>
   );
 }
@@ -98,7 +232,7 @@ interface TreeRowProps {
   ui: TreeUi;
   /** Row that started a Shift-click range (a ref, so the rows do not re-render). */
   anchorRef: { current: string | null };
-  onDrop: (nodeId: string, targetId: string, position: DropZone) => void;
+  onDrop: (nodeIds: string[], targetId: string, position: DropZone) => void;
 }
 
 function TreeRow({ node, depth, ui, anchorRef, onDrop }: TreeRowProps) {
@@ -173,7 +307,7 @@ function TreeRow({ node, depth, ui, anchorRef, onDrop }: TreeRowProps) {
           dragOver === 'inside' && 'ring-1 ring-inset ring-sky-400',
           dragOver === 'after' && 'shadow-[inset_0_2px_0_0_#38bdf8]',
           dragOver === 'before' && 'shadow-[inset_0_-2px_0_0_#38bdf8]',
-          ui.drag?.id === node.id && 'opacity-50',
+          ui.drag?.ids.includes(node.id) && 'opacity-50',
         )}
         style={{ paddingLeft: 8 + depth * 12 }}
         data-node-row={node.id}
@@ -181,10 +315,12 @@ function TreeRow({ node, depth, ui, anchorRef, onDrop }: TreeRowProps) {
         onDragStart={(event) => {
           event.dataTransfer.effectAllowed = 'move';
           event.dataTransfer.setData('text/plain', node.id);
-          ui.startDrag(node.id);
+          // Dragging a selected row carries the whole selection; dragging any other row a single one.
+          const ids = isSelected && selectedIds.length > 1 ? selectedIds : [node.id];
+          ui.startDrag(ids);
         }}
         onDragOver={(event) => {
-          if (!ui.drag || ui.drag.id === node.id) return;
+          if (!ui.drag || ui.drag.ids.includes(node.id)) return;
           event.preventDefault();
           event.dataTransfer.dropEffect = 'move';
           const zone = zoneAt(event);
@@ -197,14 +333,18 @@ function TreeRow({ node, depth, ui, anchorRef, onDrop }: TreeRowProps) {
         }}
         onDrop={(event) => {
           event.preventDefault();
-          const dragged = ui.drag?.id;
+          const dragged = ui.drag?.ids ?? [];
           const zone = zoneAt(event);
           ui.endDrag();
-          if (!dragged || dragged === node.id) return;
+          if (dragged.length === 0 || dragged.includes(node.id)) return;
           onDrop(dragged, node.id, zone);
         }}
         onClick={handleClick}
         onDoubleClick={() => ui.startEditing(node.id)}
+        onContextMenu={(event) => {
+          event.preventDefault();
+          ui.openMenu(event.clientX, event.clientY, node.id);
+        }}
         onMouseEnter={() => hover(node.id)}
         onMouseLeave={() => hover(null)}
         title={`${node.tag} · ${node.id}`}
@@ -220,7 +360,12 @@ function TreeRow({ node, depth, ui, anchorRef, onDrop }: TreeRowProps) {
           {expanded ? '▾' : '▸'}
         </button>
 
-        <ColorChip color={project.settings[node.id]?.colorOverride ?? node.fill} />
+        {isGroup ? (
+          // Groups have no colour of their own: the folder says "this is a container".
+          <FolderIcon className="h-3.5 w-3.5 text-slate-400" />
+        ) : (
+          <ColorChip color={project.settings[node.id]?.colorOverride ?? node.fill} />
+        )}
 
         {editing ? (
           <input

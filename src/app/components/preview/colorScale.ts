@@ -1,17 +1,18 @@
 /**
- * Height map scale imitating heated material glow: black (cold) → red → yellow → white (hot).
- * Interpolation happens in RGB, which keeps the ramp monotonic and readable on a dark background.
+ * Height map scale read like water depth: deep navy at the bottom, azure in the middle, pale blue at
+ * the top. Interpolation happens in RGB, which keeps the ramp monotonic and readable on a dark
+ * background.
  */
 
 const STOPS: Array<{ t: number; rgb: [number, number, number] }> = [
-  { t: 0, rgb: [0, 0, 0] },
-  { t: 1 / 3, rgb: [255, 26, 26] },
-  { t: 2 / 3, rgb: [255, 214, 10] },
-  { t: 1, rgb: [255, 255, 255] },
+  { t: 0, rgb: [9, 24, 64] },
+  { t: 0.35, rgb: [13, 71, 161] },
+  { t: 0.7, rgb: [34, 176, 214] },
+  { t: 1, rgb: [198, 235, 255] },
 ];
 
 export const HEIGHT_GRADIENT_CSS =
-  'linear-gradient(90deg, #000000 0%, #ff1a1a 33%, #ffd60a 67%, #ffffff 100%)';
+  'linear-gradient(90deg, #091840 0%, #0d47a1 35%, #22b0d6 70%, #c6ebff 100%)';
 
 const clamp01 = (value: number): number => Math.min(1, Math.max(0, value));
 

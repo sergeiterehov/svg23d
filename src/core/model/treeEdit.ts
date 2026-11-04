@@ -236,36 +236,50 @@ export function createGroup(
 
 export interface MoveResult {
   edit: TreeEdit;
-  /** New parent of the moved node (`''` for the root). */
+  /** New parent of the moved nodes (`''` for the root). */
   parentId: string;
+  /** Nodes that moved, bottom → top. */
+  movedIds: string[];
 }
 
 /**
- * Puts `nodeId` next to `targetId` (`before` = below it in the picture, `after` = above it) or inside
- * it when the target is a group.
+ * Puts `nodeIds` next to `targetId` (`before` = below it in the picture, `after` = above it) or inside
+ * it when the target is a group. A multi-selection moves as one block and keeps its internal order.
  */
-export function moveNodeInTree(
+export function moveNodesInTree(
   document: SvgDocument,
   edit: TreeEdit,
-  nodeId: string,
+  nodeIds: string[],
   targetId: string,
   position: 'before' | 'after' | 'inside',
 ): MoveResult | null {
   const index = indexNodes(document.root);
-  const node = index.get(nodeId)?.node;
+  const order = documentOrder(document.root);
   const target = index.get(targetId)?.node;
-  if (!node || !target || nodeId === targetId) return null;
-  if (isInside(node, target)) return null;
+  if (!target) return null;
+
+  const parentOf = new Map<string, SvgDocNode>();
+  for (const [id, entry] of index) parentOf.set(id, entry.parent);
+
+  const ids = new Set(nodeIds.filter((id) => index.has(id) && id !== targetId));
+  if (ids.size === 0) return null;
+  // Only the outermost nodes move: a child of another moved node travels with its parent.
+  const movedIds = [...ids]
+    .filter((id) => !hasAncestorIn(id, parentOf, ids))
+    .sort((a, b) => (order.get(a) ?? 0) - (order.get(b) ?? 0));
+  if (movedIds.length === 0) return null;
+  const nodeOf = (id: string): SvgDocNode => index.get(id)!.node;
+  // Nothing may land inside itself.
+  if (movedIds.some((id) => isInside(nodeOf(id), target))) return null;
   if (position === 'inside' && target.kind !== 'group') return null;
 
   const parent = position === 'inside' ? target : (index.get(targetId)?.parent ?? document.root);
-  const parentId = parent === document.root ? ROOT : parent.id;
   if (parent.kind === 'shape') return null;
+  const parentId = parent === document.root ? ROOT : parent.id;
 
-  return {
-    edit: { ...edit, parents: { ...edit.parents, [nodeId]: parentId } },
-    parentId,
-  };
+  const parents = { ...edit.parents };
+  for (const id of movedIds) parents[id] = parentId;
+  return { edit: { ...edit, parents }, parentId, movedIds };
 }
 
 export function renameInTree(

@@ -119,6 +119,15 @@ export function EyeIcon({ className }: IconProps) {
   );
 }
 
+/** Folder: stands for a group in the layer tree (groups have no colour of their own). */
+export function FolderIcon({ className }: IconProps) {
+  return (
+    <Svg className={className}>
+      <path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4l2 2.5h7A1.5 1.5 0 0 1 19 10v7.5A1.5 1.5 0 0 1 17.5 19h-13A1.5 1.5 0 0 1 3 17.5Z" />
+    </Svg>
+  );
+}
+
 /** Wrench crossed with a hammer (like a hammer-and-sickle emblem): the layers tools menu. */
 export function ToolsIcon({ className }: IconProps) {
   return (
@@ -212,7 +221,11 @@ export function HelpHint({ text }: { text: string }) {
           <span
             ref={tipRef}
             role="tooltip"
-            style={{ left: position?.left ?? 0, top: position?.top ?? 0, opacity: position ? 1 : 0 }}
+            style={{
+              left: position?.left ?? 0,
+              top: position?.top ?? 0,
+              opacity: position ? 1 : 0,
+            }}
             className="pointer-events-none fixed z-50 block w-60 rounded-md border border-slate-700 bg-slate-900/98 px-2.5 py-2 text-[11px] leading-snug text-slate-200 shadow-xl"
           >
             {text}

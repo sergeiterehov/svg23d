@@ -179,7 +179,9 @@ function ElementPanel({ node }: { node: SvgDocNode }) {
         </div>
 
         <ColorField
-          value={own.colorOverride ?? (node.fill === 'none' ? '#000000' : node.fill)}
+          value={own.colorOverride ?? (node.fill === 'none' ? '#cccccc' : node.fill)}
+          // A group has no colour of its own: its children bring their own, so "none" is the default.
+          empty={node.kind === 'group' && own.colorOverride === undefined ? 'нет' : undefined}
           mixed={false}
           onPick={(value) => updateSettings(node.id, { colorOverride: value })}
           onReset={
@@ -391,12 +393,15 @@ function ColorField({
   value,
   mixed,
   mixedColors,
+  empty,
   onPick,
   onReset,
 }: {
   value: string;
   mixed: boolean;
   mixedColors?: string[];
+  /** Shown instead of the swatch when the element has no colour of its own (groups). */
+  empty?: string;
   onPick: (color: string) => void;
   onReset: (() => void) | null;
 }) {
@@ -410,6 +415,7 @@ function ColorField({
             <span className="text-[10px] text-slate-500">разное</span>
           </>
         )}
+        {empty && <span className="text-[10px] text-slate-500">{empty}</span>}
         <input
           type="color"
           value={value}

@@ -7,7 +7,7 @@ import {
   applyTreeEdit,
   createGroup,
   findNodeIn,
-  moveNodeInTree,
+  moveNodesInTree,
   removeFromTree,
   renameInTree,
 } from '@core/model/treeEdit';
@@ -73,13 +73,13 @@ describe('applyTreeEdit', () => {
 
   it('never moves a node inside itself', () => {
     const base = document();
-    const result = moveNodeInTree(base, EMPTY_TREE_EDIT, 'inner', 'c', 'after');
+    const result = moveNodesInTree(base, EMPTY_TREE_EDIT, ['inner'], 'c', 'after');
     expect(result).toBeNull();
   });
 
   it('refuses to drop into a shape', () => {
     const base = document();
-    expect(moveNodeInTree(base, EMPTY_TREE_EDIT, 'a', 'b', 'inside')).toBeNull();
+    expect(moveNodesInTree(base, EMPTY_TREE_EDIT, ['a'], 'b', 'inside')).toBeNull();
   });
 });
 
@@ -142,7 +142,7 @@ describe('createGroup', () => {
 describe('moveNodeInTree', () => {
   it('moves a node into another group', () => {
     const base = document();
-    const result = moveNodeInTree(base, EMPTY_TREE_EDIT, 'a', 'inner', 'inside')!;
+    const result = moveNodesInTree(base, EMPTY_TREE_EDIT, ['a'], 'inner', 'inside')!;
     const edited = applyTreeEdit(base, result.edit);
     expect(parentIdOf(edited, 'a')).toBe('inner');
     expect(childIds(edited, 'inner')).toEqual(['c', 'd', 'a']);
@@ -150,11 +150,33 @@ describe('moveNodeInTree', () => {
 
   it('moves a node out of a group to the root', () => {
     const base = document();
-    const result = moveNodeInTree(base, EMPTY_TREE_EDIT, 'c', 'top', 'inside')!;
+    const result = moveNodesInTree(base, EMPTY_TREE_EDIT, ['c'], 'top', 'inside')!;
     const edited = applyTreeEdit(base, result.edit);
     expect(parentIdOf(edited, 'c')).toBe('top');
     expect(childIds(edited, 'inner')).toEqual(['d']);
     expect(childIds(edited, 'top')).toEqual(['a', 'b', 'inner', 'c']);
+  });
+});
+
+describe('moveNodesInTree (multi-selection)', () => {
+  it('moves a block of nodes into a group, keeping their order', () => {
+    const base = document();
+    const result = moveNodesInTree(base, EMPTY_TREE_EDIT, ['a', 'b'], 'inner', 'inside')!;
+    expect(result.movedIds).toEqual(['a', 'b']);
+    const edited = applyTreeEdit(base, result.edit);
+    expect(childIds(edited, 'inner')).toEqual(['c', 'd', 'a', 'b']);
+    expect(childIds(edited, 'top')).toEqual(['inner']);
+  });
+
+  it('drops moved children whose ancestor is in the same block', () => {
+    const base = document();
+    const result = moveNodesInTree(base, EMPTY_TREE_EDIT, ['inner', 'c', 'a'], 'top', 'before')!;
+    expect(result.movedIds).toEqual(['a', 'inner']);
+  });
+
+  it('refuses a block that would land inside itself', () => {
+    const base = document();
+    expect(moveNodesInTree(base, EMPTY_TREE_EDIT, ['inner', 'a'], 'c', 'after')).toBeNull();
   });
 });
 

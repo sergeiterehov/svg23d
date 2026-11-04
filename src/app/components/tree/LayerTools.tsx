@@ -15,9 +15,6 @@ const DEFAULT_COLOR_COUNT = 4;
  */
 export function LayerTools() {
   const distributeZ = useProjectStore((s) => s.distributeZ);
-  const groupSelected = useProjectStore((s) => s.groupSelected);
-  const removeSelected = useProjectStore((s) => s.removeSelected);
-  const selectionCount = useProjectStore((s) => s.selectedIds.length);
   const limitPalette = useProjectStore((s) => s.limitPalette);
   const resetPalette = useProjectStore((s) => s.resetPalette);
   const leaves = useProjectStore((s) => s.leaves);
@@ -75,57 +72,6 @@ export function LayerTools() {
           role="menu"
           className="absolute right-0 top-full z-30 mt-1 w-64 overflow-hidden rounded-md border border-slate-700 bg-slate-900 py-1 text-left shadow-xl"
         >
-          <div className="border-b border-slate-800 pb-1">
-            <button
-              type="button"
-              role="menuitem"
-              disabled={selectionCount === 0}
-              onClick={() => {
-                groupSelected();
-                setOpen(false);
-              }}
-              className="block w-full px-3 py-1.5 text-left transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:hover:bg-transparent"
-            >
-              <span
-                className={
-                  selectionCount === 0
-                    ? 'block text-xs text-slate-600'
-                    : 'block text-xs font-medium text-white'
-                }
-              >
-                Сгруппировать выделенное
-              </span>
-              <span className="mt-0.5 block text-[10px] leading-snug text-slate-500">
-                {selectionCount === 0
-                  ? 'Выберите элементы в дереве'
-                  : `Новая группа для ${selectionCount} элем. — ⌘G`}
-              </span>
-            </button>
-            <button
-              type="button"
-              role="menuitem"
-              disabled={selectionCount === 0}
-              onClick={() => {
-                removeSelected();
-                setOpen(false);
-              }}
-              className="block w-full px-3 py-1.5 text-left transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:hover:bg-transparent"
-            >
-              <span
-                className={
-                  selectionCount === 0
-                    ? 'block text-xs text-slate-600'
-                    : 'block text-xs font-medium text-white'
-                }
-              >
-                Удалить выделенное
-              </span>
-              <span className="mt-0.5 block text-[10px] leading-snug text-slate-500">
-                {selectionCount === 0 ? 'Выберите элементы в дереве' : '⌫ или Delete'}
-              </span>
-            </button>
-          </div>
-
           <button
             type="button"
             role="menuitem"
