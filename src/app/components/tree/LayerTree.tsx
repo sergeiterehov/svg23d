@@ -408,8 +408,13 @@ function TreeRow({ node, depth, ui, anchorRef, onDrop }: TreeRowProps) {
             : isHovered
               ? 'bg-white/10 text-white'
               : 'text-slate-300 hover:bg-slate-800/70',
-          isHidden && (isSelected || isHovered ? 'opacity-70' : 'opacity-45'),
-          isIgnored && (isSelected || isHovered ? 'opacity-60' : 'opacity-35'),
+          // «Игнорировать» is the stronger state: an element that is both hidden and ignored is drawn
+          // the ignored way, so the two opacity utilities never fight over one row.
+          isIgnored
+            ? isSelected || isHovered
+              ? 'opacity-60'
+              : 'opacity-35'
+            : isHidden && (isSelected || isHovered ? 'opacity-70' : 'opacity-45'),
           dragOver === 'inside' && 'ring-1 ring-inset ring-sky-400',
           dragOver === 'after' && 'shadow-[inset_0_2px_0_0_#38bdf8]',
           dragOver === 'before' && 'shadow-[inset_0_-2px_0_0_#38bdf8]',
@@ -503,14 +508,12 @@ function TreeRow({ node, depth, ui, anchorRef, onDrop }: TreeRowProps) {
             }}
           />
         ) : (
-          <span
-            className={clsx(
-              'truncate',
-              isGroup && 'font-medium',
-              isIgnored && 'line-through decoration-slate-600',
-            )}
-          >
-            {node.name}
+          <span className={clsx('min-w-0 truncate', isGroup && 'font-medium')}>
+            {/* The line sits on an inline box of the text only: on the row's flex item it would be
+                drawn across the whole row. */}
+            <span className={clsx(isIgnored && 'line-through decoration-slate-300')}>
+              {node.name}
+            </span>
           </span>
         )}
 
@@ -524,9 +527,26 @@ function TreeRow({ node, depth, ui, anchorRef, onDrop }: TreeRowProps) {
           {range ? `${round(range.zFrom)}–${round(range.zTo)}` : ''}
         </span>
 
-        {/* A piece of a union is not drawn on its own and an ignored element is not in the model at
-            all, so the eye would have nothing to toggle: no button for either of them. */}
-        {!unionOwner && !isIgnored && (
+        {/* Every row keeps its eye button. On a piece of a union «Скрыть» cannot work — the piece is
+            merged into the body — so there the eye does the only thing that can: takes the piece out
+            of the body (the same as «Игнорировать часть» in the inspector). */}
+        {unionOwner ? (
+          <IconButton
+            label={isIgnored ? 'Вернуть часть в тело' : 'Игнорировать часть (как удаление)'}
+            stopPropagation
+            onClick={() => updateSettings(node.id, { ignored: isIgnored ? undefined : true })}
+            className={clsx(
+              'h-4 w-4 text-slate-500 hover:bg-slate-700/70 hover:text-slate-100',
+              !isIgnored && 'opacity-0 group-hover:opacity-100',
+            )}
+          >
+            {isIgnored ? (
+              <EyeOffIcon className="h-3.5 w-3.5" />
+            ) : (
+              <EyeIcon className="h-3.5 w-3.5" />
+            )}
+          </IconButton>
+        ) : (
           <IconButton
             label={hiddenByGroup ? 'Скрыто группой' : isHidden ? 'Показать' : 'Скрыть'}
             stopPropagation

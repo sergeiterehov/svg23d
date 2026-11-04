@@ -801,14 +801,15 @@ export const useProjectStore = create<AppState>()((set, get) => ({
   exportThreeMf: () => {
     const { result, project } = get();
     if (!result || !project) return;
-    const bytes = writeThreeMf(result.parts, { title: project.document.fileName });
+    // The file follows the view: hidden elements are not drawn in 3D and are not exported (ADR-0035).
+    const bytes = writeThreeMf(result.displayParts, { title: project.document.fileName });
     downloadBytes(bytes, `${baseName(project.document.fileName)}.3mf`, 'model/3mf');
   },
 
   exportStl: () => {
     const { result, project } = get();
     if (!result || !project) return;
-    const bytes = writeBinaryStl(result.parts);
+    const bytes = writeBinaryStl(result.displayParts);
     downloadBytes(bytes, `${baseName(project.document.fileName)}.stl`, 'model/stl');
   },
 

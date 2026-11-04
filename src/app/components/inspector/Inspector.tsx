@@ -279,7 +279,7 @@ function ElementPanel({ node }: { node: SvgDocNode }) {
               hint={
                 effective.hidden && own.hidden !== true
                   ? 'Элемент скрыт вместе с группой — снимите «Скрыть» у группы'
-                  : 'Только вид: элемент не рисуется в 3D, модель и экспорт не меняются'
+                  : 'Только вид: не рисуется в 3D и не идёт в экспорт; объём и гнёзда не меняются'
               }
               onChange={(checked) =>
                 updateSettings(node.id, { hidden: checked ? true : undefined })
@@ -593,7 +593,7 @@ function MultiPanel({ nodes }: { nodes: SvgDocNode[] }) {
           checked={hidden.checked}
           mixed={hidden.mixed}
           onChange={(checked) => setFlags('hidden', checked)}
-          hint="Только вид: модель и экспорт не меняются"
+          hint="Только вид: не рисуется в 3D и не идёт в экспорт"
         />
         <Toggle
           label="Игнорировать"
@@ -843,12 +843,8 @@ function StatsPanel() {
   const missing = Boolean(scope) && leafStats.length === 0;
   const ignored =
     selected && project
-      ? effectiveSettingsFor(
-          project.document.root,
-          project.settings,
-          project.global,
-          selected.id,
-        )?.ignored === true
+      ? effectiveSettingsFor(project.document.root, project.settings, project.global, selected.id)
+          ?.ignored === true
       : false;
 
   // Whole project — the numbers the build itself reported; a selection — the same sums over its subtree.
