@@ -174,6 +174,13 @@ function ElementPanel({ node }: { node: SvgDocNode }) {
           <Toggle
             label="Скрыть"
             checked={effective.hidden}
+            // A group hides its whole subtree; a child cannot undo that on its own.
+            disabled={effective.hidden && own.hidden !== true}
+            hint={
+              effective.hidden && own.hidden !== true
+                ? 'Элемент скрыт вместе с группой — снимите «Скрыть» у группы'
+                : undefined
+            }
             onChange={(checked) => updateSettings(node.id, { hidden: checked ? true : undefined })}
           />
         </div>

@@ -82,6 +82,13 @@ export function Preview2D() {
   const maskId = (index: number): string => `svg23d-mask-${index}`;
   const indexed = shapes.map((node, index) => ({ node, index }));
 
+  /** Hidden either in the SVG itself or through the inherited "Скрыть" flag. */
+  const hiddenOf = (node: SvgDocNode): boolean =>
+    node.hidden ||
+    (effectiveSettingsFor(project.document.root, project.settings, project.global, node.id)
+      ?.hidden ??
+      false);
+
   /** Top face of an element: taken from the solved leaves, otherwise from the inherited settings. */
   const topOf = (node: SvgDocNode): number => {
     const solved = heightById.get(node.id);
@@ -141,7 +148,7 @@ export function Preview2D() {
           // Stroke outlines are built from many overlapping polygons (discs, quads); outlining each
           // of them would show the construction, so only simple shapes get a contour.
           const simple = node.subpaths.length <= 8;
-          const opacity = node.hidden
+          const opacity = hiddenOf(node)
             ? 0.12
             : mode === 'transparent'
               ? selected || hovered

@@ -9,9 +9,18 @@ interface ToggleProps {
   hint?: string;
   /** Multi-selection with different values: the switch sits in between. */
   mixed?: boolean;
+  /** The value is decided by an ancestor (e.g. a group hides this element). */
+  disabled?: boolean;
 }
 
-export function Toggle({ label, checked, onChange, hint, mixed = false }: ToggleProps) {
+export function Toggle({
+  label,
+  checked,
+  onChange,
+  hint,
+  mixed = false,
+  disabled = false,
+}: ToggleProps) {
   return (
     <div className="flex items-center gap-2">
       <button
@@ -19,10 +28,17 @@ export function Toggle({ label, checked, onChange, hint, mixed = false }: Toggle
         role="switch"
         aria-checked={mixed ? 'mixed' : checked}
         aria-label={label}
+        disabled={disabled}
         onClick={() => onChange(mixed ? true : !checked)}
         className={clsx(
           'relative h-4 w-7 shrink-0 rounded-full transition',
-          mixed ? 'bg-slate-500' : checked ? 'bg-sky-500' : 'bg-slate-700',
+          disabled
+            ? 'cursor-not-allowed opacity-50'
+            : mixed
+              ? 'bg-slate-500'
+              : checked
+                ? 'bg-sky-500'
+                : 'bg-slate-700',
         )}
       >
         <span
@@ -35,8 +51,12 @@ export function Toggle({ label, checked, onChange, hint, mixed = false }: Toggle
       <span className="flex min-w-0 items-center gap-1">
         <button
           type="button"
+          disabled={disabled}
           onClick={() => onChange(mixed ? true : !checked)}
-          className="truncate text-xs text-slate-300 hover:text-white"
+          className={clsx(
+            'truncate text-xs',
+            disabled ? 'cursor-not-allowed text-slate-500' : 'text-slate-300 hover:text-white',
+          )}
         >
           {label}
         </button>

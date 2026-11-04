@@ -40,7 +40,10 @@ export function effectiveSettingsFor(
     if (own.clearance !== undefined) effective.clearance = own.clearance;
     if (own.chamferTop !== undefined) effective.chamferTop = own.chamferTop;
     if (own.chamferBottom !== undefined) effective.chamferBottom = own.chamferBottom;
-    if (own.hidden !== undefined) effective.hidden = own.hidden;
+    // Hiding is sticky: `hidden: true` on a group hides everything inside it, and a child's own
+    // `hidden: false` cannot cancel that — otherwise the tree shows an element as visible while its
+    // parent has hidden it.
+    if (own.hidden === true) effective.hidden = true;
     if (own.isPart !== undefined) effective.isPart = own.isPart;
     if (own.colorOverride !== undefined) effective.colorOverride = own.colorOverride;
   }

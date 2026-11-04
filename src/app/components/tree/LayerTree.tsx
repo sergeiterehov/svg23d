@@ -262,6 +262,9 @@ function TreeRow({ node, depth, ui, anchorRef, onDrop }: TreeRowProps) {
   const isSelected = selectedIds.includes(node.id);
   const isHovered = hoveredId === node.id;
   const isHidden = effective?.hidden === true;
+  /** Hidden by this node itself (a group hiding its subtree cannot be undone from a child). */
+  const ownHidden = project.settings[node.id]?.hidden === true;
+  const hiddenByGroup = isHidden && !ownHidden;
   const isGroup = node.kind === 'group';
   const hasChildren = node.children.length > 0;
   const isPart = project.settings[node.id]?.isPart === true;
@@ -407,9 +410,10 @@ function TreeRow({ node, depth, ui, anchorRef, onDrop }: TreeRowProps) {
         </span>
 
         <IconButton
-          label={isHidden ? 'Показать' : 'Скрыть'}
+          label={hiddenByGroup ? 'Скрыто группой' : isHidden ? 'Показать' : 'Скрыть'}
           stopPropagation
-          onClick={() => updateSettings(node.id, { hidden: !isHidden })}
+          disabled={hiddenByGroup}
+          onClick={() => updateSettings(node.id, { hidden: isHidden ? undefined : true })}
           className={clsx(
             'h-4 w-4 text-slate-500 hover:bg-slate-700/70 hover:text-slate-100',
             !isHidden && 'opacity-0 group-hover:opacity-100',
