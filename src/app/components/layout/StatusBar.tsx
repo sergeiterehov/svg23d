@@ -4,6 +4,9 @@ import { useProjectStore, type Status } from '../../store/useProjectStore';
 import { ResetIcon } from '../common/Icon';
 import { IconButton } from '../common/IconButton';
 
+/** Repository of the project: the link sits in the status bar so it is reachable from any view. */
+const GITHUB_URL = 'https://github.com/sergeiterehov/svg23d';
+
 export function StatusBar() {
   const warnings = useProjectStore((s) => s.warnings);
   const error = useProjectStore((s) => s.error);
@@ -67,6 +70,16 @@ export function StatusBar() {
               предупреждений: {uniqueWarnings.length}
             </button>
           )}
+
+          <a
+            href={GITHUB_URL}
+            target="_blank"
+            rel="noreferrer"
+            title="Открыть проект на GitHub"
+            className="rounded px-2 py-0.5 text-slate-500 transition hover:bg-slate-800 hover:text-slate-100"
+          >
+            GitHub
+          </a>
 
           <IconButton
             label="Пересчитать модель"
