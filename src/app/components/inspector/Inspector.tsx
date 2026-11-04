@@ -3,7 +3,6 @@ import { effectiveSettingsFor } from '@core/solver/inheritance';
 import { collectSubtreeIds } from '@core/solver/selection';
 import type { BBox3, LeafStats, ResolvedLeaf, SvgDocNode } from '@core/model/types';
 import { useProjectStore, type BuildResultState } from '../../store/useProjectStore';
-import { isEmptyDocument } from '@core/model/empty';
 import { NumberField } from '../common/NumberField';
 import { ColorChip, Toggle } from '../common/Toggle';
 import { HelpHint } from '../common/Icon';
@@ -165,7 +164,6 @@ function ElementPanel({ node }: { node: SvgDocNode }) {
 function ProjectPanel() {
   const project = useProjectStore((s) => s.project);
   const updateGlobal = useProjectStore((s) => s.updateGlobal);
-  const distributeZ = useProjectStore((s) => s.distributeZ);
 
   if (!project) return null;
   const { global } = project;
@@ -245,16 +243,6 @@ function ProjectPanel() {
             onChange={(value) => updateGlobal({ flatness: Number(value) })}
           />
         </label>
-
-        <button
-          type="button"
-          onClick={distributeZ}
-          disabled={isEmptyDocument(project.document)}
-          className="w-full rounded-md border border-slate-700 px-2 py-1.5 text-[11px] text-slate-300 transition hover:border-slate-500 hover:text-white disabled:cursor-not-allowed disabled:border-slate-800 disabled:text-slate-600 disabled:hover:border-slate-800 disabled:hover:text-slate-600"
-          title="Каждой детали — свой диапазон высот с перекрытием 0.5 мм"
-        >
-          Разложить по слоям
-        </button>
 
         <p className="pt-1 text-[10px] leading-snug text-slate-500">
           Чтобы настроить конкретный элемент, выберите его в дереве слева.

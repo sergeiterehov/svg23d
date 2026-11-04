@@ -6,6 +6,7 @@ import { Toolbar } from './components/layout/Toolbar';
 import { StatusBar } from './components/layout/StatusBar';
 import { SvgDropzone } from './components/upload/SvgDropzone';
 import { LayerTree } from './components/tree/LayerTree';
+import { LayerTools } from './components/tree/LayerTools';
 import { Preview2D } from './components/preview/Preview2D';
 import { Preview3D } from './components/preview/Preview3D';
 import { Inspector } from './components/inspector/Inspector';
@@ -62,6 +63,7 @@ export default function App() {
             <div className="flex items-center gap-1 px-3 py-2 text-[10px] uppercase tracking-wider text-slate-500">
               <span>Слои</span>
               <HelpHint text="Сверху вниз = порядок вырезания: верхний элемент делает гнёзда в нижних. Стрелки меняют порядок вручную." />
+              <LayerTools />
             </div>
             <LayerTree />
           </div>

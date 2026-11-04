@@ -20,8 +20,9 @@ import {
 } from '@core/model/project';
 import { parseSvg, SvgParseError } from '@core/svg/parseSvg';
 import { createEmptyDocument, createEmptyProject, isEmptyDocument } from '@core/model/empty';
-import { resolveLeaves, findPartRoots, type PartInfo } from '@core/solver/resolveLeaves';
+import { resolveLeaves, type PartInfo } from '@core/solver/resolveLeaves';
 import { findParent, shiftChildOrder } from '@core/solver/order';
+import { distributeLayers } from '@core/solver/distribute';
 import { writeThreeMf } from '@core/export/threemf';
 import { writeBinaryStl } from '@core/export/stl';
 import { baseName, downloadBytes } from '@core/export/download';
@@ -270,14 +271,7 @@ export const useProjectStore = create<AppState>()((set, get) => ({
   distributeZ: () => {
     const { project } = get();
     if (!project) return;
-    const thickness = 2;
-    const step = 1.5;
-    const roots = findPartRoots(project.document.root, project.settings);
-    const settings: Record<string, NodeSettings> = { ...project.settings };
-    roots.forEach((id, index) => {
-      const zFrom = round(index * step);
-      settings[id] = { ...(settings[id] ?? {}), zFrom, zTo: round(zFrom + thickness) };
-    });
+    const settings = distributeLayers(project.document.root, project.settings, project.global);
     pushHistory(set, get, 'distribute');
     set({ project: { ...project, settings } });
     scheduleRebuild(set, get, 0);
@@ -382,10 +376,6 @@ function pushHistory(set: SetState, get: GetState, key: string): void {
     past: [...past, { settings: project.settings, global: project.global }].slice(-HISTORY_LIMIT),
     future: [],
   });
-}
-
-function round(value: number): number {
-  return Math.round(value * 1000) / 1000;
 }
 
 function scheduleRebuild(set: SetState, get: GetState, delay: number): void {

@@ -119,6 +119,27 @@ export function EyeIcon({ className }: IconProps) {
   );
 }
 
+/** Wrench: half of the "tools" icon. The ring is drawn as an open arc so it does not read as a
+ * magnifier at 12 px. */
+export function WrenchIcon({ className }: IconProps) {
+  return (
+    <Svg className={className}>
+      <path d="M18.9 4.4a3.6 3.6 0 1 0 1.2 4.9" />
+      <path d="m15 11-10 10" />
+    </Svg>
+  );
+}
+
+/** Hammer: the second half of the "tools" icon. */
+export function HammerIcon({ className }: IconProps) {
+  return (
+    <Svg className={className}>
+      <path d="M5 4h9v5.5H5z" />
+      <path d="M9.5 9.5V21" />
+    </Svg>
+  );
+}
+
 export function EyeOffIcon({ className }: IconProps) {
   return (
     <Svg className={className}>
