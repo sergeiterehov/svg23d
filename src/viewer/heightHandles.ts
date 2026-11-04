@@ -17,15 +17,22 @@ export interface HeightRange {
 
 export interface HeightHandles {
   group: THREE.Group;
-  /** Model bounds: XY centre of the arrows and their size. */
+  /** Model bounds: fallback XY centre and the "has model" flag. */
   update: (bounds: THREE.Box3) => void;
   /** Height band the arrows straddle; `null` hides them (nothing selected). */
   setRange: (range: HeightRange | null) => void;
+  /** XY centre of the selected shape (world units); `null` → model centre. */
+  setCenter: (center: THREE.Vector3 | null) => void;
+  /** Keeps the arrows the same height on screen: `mmPerPixel` × `ARROW_HEIGHT_PX`. */
+  setPixelScale: (mmPerPixel: number) => void;
   /** Which arrow the ray hits, if any. The raycaster must already be set from the camera. */
   hit: (raycaster: THREE.Raycaster) => HeightHandleSide | null;
   setHovered: (side: HeightHandleSide | null) => void;
   dispose: () => void;
 }
+
+/** On-screen height of an arrow, in CSS pixels, independent of zoom and model size. */
+export const ARROW_HEIGHT_PX = 48;
 
 const BASE_COLOR = '#38bdf8';
 const HOVER_COLOR = '#e0f2fe';
@@ -73,16 +80,19 @@ export function createHeightHandles(): HeightHandles {
   down.group.rotation.x = Math.PI;
   group.add(up.group, down.group);
 
+  const modelCenter = new THREE.Vector3();
   const center = new THREE.Vector3();
   let size = 10;
   let hasModel = false;
   let range: HeightRange | null = null;
+  let explicitCenter: THREE.Vector3 | null = null;
 
   const apply = (): void => {
     const band = range;
     group.visible = hasModel && band !== null;
     if (!band) return;
     const gap = size * 0.1;
+    center.copy(explicitCenter ?? modelCenter);
     group.position.set(center.x, center.y, 0);
     up.group.position.set(0, 0, band.top + gap);
     up.group.scale.setScalar(size);
@@ -103,10 +113,15 @@ export function createHeightHandles(): HeightHandles {
         group.visible = false;
         return;
       }
-      bounds.getCenter(center);
-      const extent = bounds.getSize(new THREE.Vector3());
-      // Prominent enough to grab, but never dominating the model.
-      size = THREE.MathUtils.clamp(Math.max(extent.x, extent.y, extent.z) * 0.22, 6, 48);
+      bounds.getCenter(modelCenter);
+      apply();
+    },
+    setCenter(nextCenter) {
+      explicitCenter = nextCenter;
+      apply();
+    },
+    setPixelScale(mmPerPixel) {
+      size = Math.max(mmPerPixel * ARROW_HEIGHT_PX, 1e-4);
       apply();
     },
     setRange(next) {

@@ -2,7 +2,10 @@ import { useEffect, useMemo, useRef } from 'react';
 import { useProjectStore, HEIGHT_STEP_MM } from '../../store/useProjectStore';
 import { createViewer, type ViewerHandle } from '@viewer/createViewer';
 import { partIdForSelection } from '@core/solver/selection';
+import { collectSubtreeIds } from '@core/solver/selection';
 import { effectiveSettingsFor } from '@core/solver/inheritance';
+import { findNode } from '@core/solver/resolveLeaves';
+import { bboxOfContours } from '@core/model/defaults';
 
 export function Preview3D() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -91,6 +94,35 @@ export function Preview3D() {
   useEffect(() => {
     viewerRef.current?.setHeightRange(heightRange);
   }, [heightRange, result]);
+
+  // The arrows sit over the middle of the selected shape (a group uses the group's own bounds).
+  const heightCenter = useMemo(() => {
+    if (!project || selectedIds.length === 0) return null;
+    const ids = new Set<string>();
+    for (const id of selectedIds) {
+      const node = findNode(project.document.root, id);
+      if (node) for (const child of collectSubtreeIds(node)) ids.add(child);
+    }
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const leaf of leaves) {
+      if (!ids.has(leaf.id)) continue;
+      const box = bboxOfContours(leaf.contours);
+      if (!Number.isFinite(box.minX) || !Number.isFinite(box.minY)) continue;
+      minX = Math.min(minX, box.minX);
+      minY = Math.min(minY, box.minY);
+      maxX = Math.max(maxX, box.maxX);
+      maxY = Math.max(maxY, box.maxY);
+    }
+    if (!Number.isFinite(minX) || !Number.isFinite(minY)) return null;
+    return { x: (minX + maxX) / 2, y: (minY + maxY) / 2 };
+  }, [project, selectedIds, leaves]);
+
+  useEffect(() => {
+    viewerRef.current?.setHeightCenter(heightCenter);
+  }, [heightCenter, result]);
 
   useEffect(() => {
     viewerRef.current?.setView({ material, lighting, projection });

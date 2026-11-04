@@ -31,6 +31,8 @@ export interface ViewerHandle {
   setSelectedParts: (partIds: string[]) => void;
   /** Height band of the selection: the arrows sit on its top/bottom; `null` hides them. */
   setHeightRange: (range: HeightRange | null) => void;
+  /** XY centre of the selected shape in model mm; `null` falls back to the model centre. */
+  setHeightCenter: (point: { x: number; y: number } | null) => void;
   /** Material/lighting/projection presets; does not rebuild geometry. */
   setView: (view: ViewOptions) => void;
   /** Mounts the orientation cube; returns a detach function. */
@@ -263,7 +265,9 @@ export function createViewer(container: HTMLElement, options: ViewerOptions = {}
     fillLight.intensity = 0.45;
   };
 
-  const materialParams = (material: ViewMaterial): {
+  const materialParams = (
+    material: ViewMaterial,
+  ): {
     roughness: number;
     metalness: number;
   } =>
@@ -274,8 +278,7 @@ export function createViewer(container: HTMLElement, options: ViewerOptions = {}
   let currentView: ViewOptions = options.view ?? DEFAULT_VIEW;
   applyLighting(currentView.lighting);
 
-  const viewDistance = (): number =>
-    Math.max(camera.position.distanceTo(controls.target), 1e-6);
+  const viewDistance = (): number => Math.max(camera.position.distanceTo(controls.target), 1e-6);
 
   /**
    * Orthographic framing mirrors the perspective one: the frustum height is what a perspective
@@ -371,6 +374,8 @@ export function createViewer(container: HTMLElement, options: ViewerOptions = {}
   let grid: THREE.GridHelper | null = null;
   const partsGroup = new THREE.Group();
   scene.add(partsGroup);
+  /** Bounds centre of the model in mm, i.e. the offset applied to the parts group. */
+  const modelCenter = new THREE.Vector3();
 
   const materials: THREE.MeshStandardMaterial[] = [];
   const geometries: THREE.BufferGeometry[] = [];
@@ -452,6 +457,8 @@ export function createViewer(container: HTMLElement, options: ViewerOptions = {}
     stepTransition();
     controls.update();
     composer.render();
+    // The arrows keep a constant on-screen height, whatever the zoom and the model size.
+    handles.setPixelScale(worldPerPixel());
     navCube?.sync(camera);
     navCube?.render();
   });
@@ -492,10 +499,12 @@ export function createViewer(container: HTMLElement, options: ViewerOptions = {}
       // SVG coordinates start at the top-left corner, so without this the model sits in the
       // corner of the plate instead of on its centre.
       partsGroup.position.set(0, 0, 0);
+      modelCenter.set(0, 0, 0);
       let bounds = new THREE.Box3().setFromCenterAndSize(new THREE.Vector3(), new THREE.Vector3());
       if (partsGroup.children.length > 0) {
         bounds = new THREE.Box3().setFromObject(partsGroup);
         const center = bounds.getCenter(new THREE.Vector3());
+        modelCenter.copy(center);
         partsGroup.position.set(-center.x, -center.y, 0);
         bounds = new THREE.Box3().setFromObject(partsGroup);
       }
@@ -512,6 +521,11 @@ export function createViewer(container: HTMLElement, options: ViewerOptions = {}
     },
     setHeightRange(range) {
       handles.setRange(range);
+    },
+    setHeightCenter(point) {
+      handles.setCenter(
+        point ? new THREE.Vector3(point.x - modelCenter.x, point.y - modelCenter.y, 0) : null,
+      );
     },
     setView(view) {
       currentView = view;
