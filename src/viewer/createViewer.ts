@@ -19,6 +19,10 @@ export const DEFAULT_VIEW: ViewOptions = {
   projection: 'perspective',
 };
 
+/** Build plate drawn under the model, in mm. */
+const GRID_SIZE_MM = 256;
+const GRID_DIVISIONS = 16;
+
 export interface ViewerHandle {
   /** `frame: true` re-frames the camera; by default the current view is preserved. */
   setParts: (parts: PartMesh[], options?: { frame?: boolean }) => void;
@@ -298,14 +302,14 @@ export function createViewer(container: HTMLElement, options: ViewerOptions = {}
 
   let wireframe = false;
 
-  const updateGrid = (size: number): void => {
+  const updateGrid = (): void => {
     if (grid) {
       scene.remove(grid);
       grid.geometry.dispose();
       (grid.material as THREE.Material).dispose();
     }
-    const extent = Math.max(size, 20);
-    grid = new THREE.GridHelper(extent, 20, 0x334155, 0x1e293b);
+    // Fixed build plate: the model is centred on the origin, so the grid zero is under it.
+    grid = new THREE.GridHelper(GRID_SIZE_MM, GRID_DIVISIONS, 0x475569, 0x1e293b);
     grid.rotation.x = Math.PI / 2;
     grid.position.z = -0.01;
     scene.add(grid);
@@ -387,7 +391,6 @@ export function createViewer(container: HTMLElement, options: ViewerOptions = {}
     setParts(parts, partOptions) {
       const wasEmpty = partsGroup.children.length === 0;
       disposeParts();
-      let extent = 20;
       for (const part of parts) {
         const geometry = new THREE.BufferGeometry();
         geometry.setAttribute('position', new THREE.BufferAttribute(part.positions.slice(), 3));
@@ -410,13 +413,16 @@ export function createViewer(container: HTMLElement, options: ViewerOptions = {}
         partsGroup.add(mesh);
         geometries.push(geometry);
         materials.push(material);
-
-        const box = geometry.boundingBox;
-        if (box) {
-          extent = Math.max(extent, box.max.x - box.min.x, box.max.y - box.min.y);
-        }
       }
-      updateGrid(extent * 1.4);
+      // SVG coordinates start at the top-left corner, so without this the model sits in the
+      // corner of the plate instead of on its centre.
+      partsGroup.position.set(0, 0, 0);
+      if (partsGroup.children.length > 0) {
+        const bounds = new THREE.Box3().setFromObject(partsGroup);
+        const center = bounds.getCenter(new THREE.Vector3());
+        partsGroup.position.set(-center.x, -center.y, 0);
+      }
+      updateGrid();
       // Re-frame only for the first model or when the document itself changed; otherwise the
       // user's camera must survive every settings change and rebuild.
       if (wasEmpty || partOptions?.frame) frameAll();
