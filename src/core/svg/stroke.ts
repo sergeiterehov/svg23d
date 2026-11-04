@@ -107,7 +107,10 @@ function addCap(
 function disc(center: Vec2, radius: number, tolerance: number): Contour {
   const ratio = Math.min(1, Math.max(-1, 1 - tolerance / Math.max(radius, 1e-9)));
   const step = 2 * Math.acos(ratio);
-  const segments = Math.max(8, Math.min(64, Math.ceil((Math.PI * 2) / Math.max(step, 1e-3))));
+  // The cap only guards against absurd counts for very thick strokes. It used to be 64, which is
+  // reached already at the default quality for a 22-unit stroke — and then «Точное»/«Максимальное»
+  // silently did nothing. 128 keeps the finest preset meaningful and the polygon still smooth.
+  const segments = Math.max(8, Math.min(128, Math.ceil((Math.PI * 2) / Math.max(step, 1e-3))));
   const points: Contour = [];
   for (let i = 0; i < segments; i++) {
     const angle = (i / segments) * Math.PI * 2;

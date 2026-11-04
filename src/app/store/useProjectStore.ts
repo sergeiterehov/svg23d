@@ -114,6 +114,11 @@ interface AppState {
   project: Project | null;
   /** Parsed markup the structural overlay is applied to; recomputed on import, never saved. */
   baseDocument: SvgDocument;
+  /**
+   * Quality/size the current `baseDocument` was flattened with. Curves are flattened once, when the
+   * SVG is parsed, so a different «качество кривых» or model size has to re-parse the source.
+   */
+  parsedSignature: string | null;
   leaves: ResolvedLeaf[];
   parts: PartInfo[];
   modelSize: { widthMm: number; heightMm: number } | null;
@@ -187,6 +192,7 @@ export const useProjectStore = create<AppState>()((set, get) => ({
   project: createEmptyProject(),
   // The parsed markup the structural edits are applied to (never part of the project file).
   baseDocument: createEmptyDocument(),
+  parsedSignature: null,
   leaves: [],
   parts: [],
   modelSize: null,
@@ -221,6 +227,7 @@ export const useProjectStore = create<AppState>()((set, get) => ({
       set({
         project,
         baseDocument: base,
+        parsedSignature: parseSignature(global),
         selectedIds: [],
         hoveredId: null,
         result: null,
@@ -260,6 +267,7 @@ export const useProjectStore = create<AppState>()((set, get) => ({
       set({
         project,
         baseDocument: base,
+        parsedSignature: parseSignature(file.global),
         selectedIds: [],
         hoveredId: null,
         result: null,
@@ -304,6 +312,8 @@ export const useProjectStore = create<AppState>()((set, get) => ({
         ...future,
       ],
     });
+    // Undoing a quality change has to bring the old flattening back too.
+    syncParsedDocument(set, get);
     scheduleRebuild(set, get, 0);
   },
 
@@ -323,6 +333,7 @@ export const useProjectStore = create<AppState>()((set, get) => ({
       past: [...past, { settings: project.settings, global: project.global, tree: project.tree }],
       future: future.slice(1),
     });
+    syncParsedDocument(set, get);
     scheduleRebuild(set, get, 0);
   },
 
@@ -524,6 +535,9 @@ export const useProjectStore = create<AppState>()((set, get) => ({
         global: { ...project.global, ...constrainGlobalPatch(patch, project.global) },
       },
     });
+    // «Качество кривых» and the model size change the flattening tolerance, which is applied when the
+    // source is parsed: without a re-parse the setting would only move numbers in the panel.
+    syncParsedDocument(set, get);
     // Nothing to rebuild while the document is empty; the values apply to the next import.
     if (!isEmptyDocument(project.document)) scheduleRebuild(set, get, REBUILD_DEBOUNCE_MS);
   },
@@ -582,6 +596,7 @@ export const useProjectStore = create<AppState>()((set, get) => ({
     set({
       project: createEmptyProject(),
       baseDocument: createEmptyDocument(),
+      parsedSignature: null,
       leaves: [],
       parts: [],
       modelSize: null,
@@ -674,6 +689,34 @@ function wrapSelection(set: SetState, get: GetState, ids: string[], union: boole
 /** Leaves with every contour set of a union object, so the palette weights the whole body. */
 function withAllContours(leaves: ResolvedLeaf[]): Array<{ color: string; contours: Contour[] }> {
   return leaves.map((leaf) => ({ color: leaf.color, contours: leafContours(leaf) }));
+}
+
+/** Everything that changes the flattening tolerance of a parse: quality, target size, fit axis. */
+function parseSignature(global: GlobalSettings): string {
+  return `${global.flatness}|${global.fitSizeMm}|${global.fit}`;
+}
+
+/**
+ * Curves are flattened when the SVG is parsed, not when the model is built (ADR-0030). The parsed
+ * document is therefore rebuilt whenever the tolerance inputs no longer match the ones it was parsed
+ * with — this is what makes «качество кривых» actually change the triangle count.
+ */
+function syncParsedDocument(set: SetState, get: GetState): void {
+  const { project, parsedSignature } = get();
+  if (!project || project.source.trim() === '') return;
+  const signature = parseSignature(project.global);
+  if (signature === parsedSignature) return;
+
+  try {
+    const base = parseSvg(project.source, { fileName: project.fileName, global: project.global });
+    set({
+      baseDocument: base,
+      parsedSignature: signature,
+      project: { ...project, document: applyTreeEdit(base, project.tree) },
+    });
+  } catch (error) {
+    set({ status: 'error', error: (error as Error).message });
+  }
 }
 
 function pushHistory(set: SetState, get: GetState, key: string): void {
