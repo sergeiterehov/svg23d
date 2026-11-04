@@ -9,6 +9,7 @@ import {
   clearUnions,
   markUnions,
   removeFromTree,
+  ungroupInTree,
   type TreeEdit,
 } from '@core/model/treeEdit';
 import { parseSvg } from '@core/svg/parseSvg';
@@ -109,6 +110,21 @@ describe('union resolving', () => {
     const document = applyTreeEdit(parse(), unionEdit);
     const leaf = resolve(document, { b: { hidden: true } }).leaves[0];
     expect(leaf.unionSources).toBeUndefined();
+  });
+
+  it('lifts the pieces up when «Разъединить» dissolves the union', () => {
+    const union = applyTreeEdit(parse(), unionEdit);
+    const dissolved = ungroupInTree(union, unionEdit, 'group-1');
+
+    expect(dissolved?.movedIds).toEqual(['a', 'b']);
+    // No group is left behind: the pieces take its place, exactly like «Разгруппировать».
+    const document = applyTreeEdit(parse(), dissolved!.edit);
+    expect(document.root.children.map((node) => node.id).sort()).toEqual(['a', 'b']);
+    expect(dissolved?.edit.unions).toEqual([]);
+
+    const leaves = resolve(document).leaves;
+    expect(leaves.map((leaf) => leaf.id)).toEqual(['a', 'b']);
+    expect(leaves.every((leaf) => leaf.unionSources === undefined)).toBe(true);
   });
 
   it('goes back to separate leaves when the union flag is cleared', () => {

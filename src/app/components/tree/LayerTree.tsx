@@ -3,12 +3,20 @@ import clsx from 'clsx';
 import type { NodeSettings, SvgDocNode } from '@core/model/types';
 import { effectiveSettingsFor } from '@core/solver/inheritance';
 import { orderedChildren } from '@core/solver/order';
-import { fallbackFillOf, findNode } from '@core/solver/resolveLeaves';
-import { findUnionOwner } from '@core/solver/selection';
+import { findNode } from '@core/solver/resolveLeaves';
 import { useProjectStore } from '../../store/useProjectStore';
-import { ColorChip } from '../common/Toggle';
-import { EyeIcon, EyeOffIcon, FolderIcon, UnionIcon } from '../common/Icon';
+import {
+  EyeIcon,
+  EyeOffIcon,
+  FolderIcon,
+  RenameIcon,
+  SplitIcon,
+  TrashIcon,
+  UngroupIcon,
+  UnionIcon,
+} from '../common/Icon';
 import { IconButton } from '../common/IconButton';
+import { NodeIcon, nodeColour } from '../common/NodeIcon';
 
 /** Where a dragged row lands relative to the row under the pointer. */
 type DropZone = 'before' | 'after' | 'inside';
@@ -48,18 +56,6 @@ function flattenRows(
     if (settings[child.id]?.collapsed !== true) flattenRows(child, settings, out);
   }
   return out;
-}
-
-/** The union icon is drawn in the body's colour, but a very dark colour would vanish on the panel. */
-function readableIconColour(hex: string): string {
-  const match = /^#([0-9a-f]{6})$/i.exec(hex);
-  if (!match) return '#94a3b8';
-  const value = Number.parseInt(match[1], 16);
-  const r = (value >> 16) & 0xff;
-  const g = (value >> 8) & 0xff;
-  const b = value & 0xff;
-  const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
-  return luminance < 0.22 ? '#94a3b8' : hex;
 }
 
 /** Shapes behind the given nodes, de-duplicated: how many objects a union would merge. */
@@ -193,50 +189,37 @@ function TreeContextMenu({
     };
   }, [onClose]);
 
-  const item =
-    'flex w-full items-center justify-between gap-6 px-3 py-1.5 text-left text-xs transition';
   const count = selectedIds.length;
   // A union needs at least two shapes; a single group of shapes can be merged in place.
   const shapes = project ? countShapes(project.document.root, selectedIds) : 0;
-  const unionId =
-    selectedIds.length === 1 && project?.tree.unions.includes(selectedIds[0])
-      ? selectedIds[0]
-      : null;
-  // «Разгруппировать» is for plain groups; a union goes through «Разъединить».
-  const target = project ? findNode(project.document.root, nodeId) : null;
-  const canUngroup = Boolean(
-    target && target.kind === 'group' && target.children.length > 0 && !target.union,
-  );
+  const target = project && count === 1 ? findNode(project.document.root, nodeId) : null;
+  // «Разъединить» dissolves a union, «Разгруппировать» — a plain group; both lift the children.
+  const canSplit = target?.union === true;
+  const canUngroup =
+    Boolean(target && target.kind === 'group' && target.children.length > 0) && !canSplit;
 
   return (
     <div
       ref={ref}
       role="menu"
-      className="fixed z-50 w-56 overflow-hidden rounded-md border border-slate-700 bg-slate-900 py-1 shadow-xl"
+      className="fixed z-50 w-52 overflow-hidden rounded-md border border-slate-700 bg-slate-900 py-1 shadow-xl"
       style={{ left: position.left, top: position.top }}
       data-node-menu={nodeId}
     >
-      <button
-        type="button"
-        role="menuitem"
+      <MenuItem
+        icon={<FolderIcon className="h-3.5 w-3.5" />}
+        label={`Сгруппировать${count > 1 ? ` (${count})` : ''}`}
+        shortcut="⌘G"
         disabled={count === 0}
         onClick={() => {
           groupSelected();
           onClose();
         }}
-        className={clsx(
-          item,
-          count === 0
-            ? 'cursor-not-allowed text-slate-600'
-            : 'text-slate-200 hover:bg-slate-800 hover:text-white',
-        )}
-      >
-        <span>Сгруппировать{count > 1 ? ` (${count})` : ''}</span>
-        <span className="text-[10px] text-slate-500">⌘G</span>
-      </button>
-      <button
-        type="button"
-        role="menuitem"
+      />
+      <MenuItem
+        icon={<UnionIcon className="h-3.5 w-3.5" />}
+        label="Объединить"
+        shortcut="⌘U"
         disabled={shapes < 2}
         title={
           shapes < 2
@@ -247,75 +230,96 @@ function TreeContextMenu({
           unionSelected();
           onClose();
         }}
-        className={clsx(
-          item,
-          shapes < 2
-            ? 'cursor-not-allowed text-slate-600'
-            : 'text-slate-200 hover:bg-slate-800 hover:text-white',
-        )}
-      >
-        <span>Объединить</span>
-        <span className="text-[10px] text-slate-500">⌘U</span>
-      </button>
-      {unionId && (
-        <button
-          type="button"
-          role="menuitem"
+      />
+      {canSplit && (
+        <MenuItem
+          icon={<SplitIcon className="h-3.5 w-3.5" />}
+          label="Разъединить"
           onClick={() => {
             ununionSelected();
             onClose();
           }}
-          className={clsx(item, 'text-slate-200 hover:bg-slate-800 hover:text-white')}
-        >
-          <span>Разъединить</span>
-          <span className="text-[10px] text-slate-500">вернуть части</span>
-        </button>
+        />
       )}
       {canUngroup && (
-        <button
-          type="button"
-          role="menuitem"
+        <MenuItem
+          icon={<UngroupIcon className="h-3.5 w-3.5" />}
+          label="Разгруппировать"
           onClick={() => {
             ungroupSelected();
             onClose();
           }}
-          className={clsx(item, 'text-slate-200 hover:bg-slate-800 hover:text-white')}
-        >
-          <span>Разгруппировать</span>
-          <span className="text-[10px] text-slate-500">поднять элементы</span>
-        </button>
+        />
       )}
-      <button
-        type="button"
-        role="menuitem"
-        onClick={() => {
-          onRename();
-        }}
-        className={clsx(item, 'text-slate-200 hover:bg-slate-800 hover:text-white')}
-      >
-        <span>Переименовать</span>
-        <span className="text-[10px] text-slate-500">двойной клик</span>
-      </button>
+      <MenuItem
+        icon={<RenameIcon className="h-3.5 w-3.5" />}
+        label="Переименовать"
+        onClick={onRename}
+      />
       <div className="my-1 border-t border-slate-800" />
-      <button
-        type="button"
-        role="menuitem"
+      <MenuItem
+        icon={<TrashIcon className="h-3.5 w-3.5" />}
+        label={`Удалить${count > 1 ? ` (${count})` : ''}`}
+        shortcut="⌫"
+        danger
         disabled={count === 0}
         onClick={() => {
           removeSelected();
           onClose();
         }}
+      />
+    </div>
+  );
+}
+
+/**
+ * One row of the context menu: icon, action, and only the keyboard shortcut on the right — a menu
+ * that also explains each action turned into a wall of text.
+ */
+function MenuItem({
+  icon,
+  label,
+  shortcut,
+  disabled,
+  danger,
+  title,
+  onClick,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  shortcut?: string;
+  disabled?: boolean;
+  danger?: boolean;
+  title?: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      disabled={disabled}
+      title={title}
+      onClick={onClick}
+      className={clsx(
+        'flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs transition',
+        disabled
+          ? 'cursor-not-allowed text-slate-600'
+          : danger
+            ? 'text-rose-300 hover:bg-rose-500/15 hover:text-rose-200'
+            : 'text-slate-200 hover:bg-slate-800 hover:text-white',
+      )}
+    >
+      <span
         className={clsx(
-          item,
-          count === 0
-            ? 'cursor-not-allowed text-slate-600'
-            : 'text-rose-300 hover:bg-rose-500/15 hover:text-rose-200',
+          'grid h-3.5 w-3.5 shrink-0 place-items-center',
+          !disabled && (danger ? 'text-rose-400/80' : 'text-slate-400'),
         )}
       >
-        <span>Удалить{count > 1 ? ` (${count})` : ''}</span>
-        <span className="text-[10px] text-slate-500">⌫</span>
-      </button>
-    </div>
+        {icon}
+      </span>
+      <span className="truncate">{label}</span>
+      {shortcut && <span className="ml-auto shrink-0 text-[10px] text-slate-500">{shortcut}</span>}
+    </button>
   );
 }
 
@@ -348,10 +352,8 @@ function TreeRow({ node, depth, ui, anchorRef, onDrop }: TreeRowProps) {
     node.id,
   );
   // A part of a union has no heights or colour of its own: both come from the merged body.
-  const unionOwner = node.union === true ? null : findUnionOwner(project.document.root, node.id);
+  const { unionOwner } = nodeColour(project.document.root, project.settings, node);
   const range = unionOwner ? null : effective;
-  const colourNode = unionOwner ?? node;
-  const colour = project.settings[colourNode.id]?.colorOverride ?? fallbackFillOf(colourNode);
   const isSelected = selectedIds.includes(node.id);
   const isHovered = hoveredId === node.id;
   const isHidden = effective?.hidden === true;
@@ -461,23 +463,14 @@ function TreeRow({ node, depth, ui, anchorRef, onDrop }: TreeRowProps) {
           {expanded ? '▾' : '▸'}
         </button>
 
-        {node.union ? (
-          // Merged body: the icon carries the object's colour, the shape says "not just a container".
-          <span
-            className="grid shrink-0 place-items-center"
-            style={{ color: readableIconColour(colour) }}
-            title="Объединение"
-          >
-            <UnionIcon className="h-3.5 w-3.5" />
-          </span>
-        ) : isGroup && !unionOwner ? (
-          // Groups have no colour of their own: the folder says "this is a container".
-          <FolderIcon className="h-3.5 w-3.5 text-slate-400" />
-        ) : (
-          // Parts of a union wear the union's colour: their own is ignored by the solver.
-          <ColorChip color={colour} />
-        )}
-
+        {/* Shared with the inspector, so a row and the selected element always look the same. */}
+        <NodeIcon
+          node={node}
+          root={project.document.root}
+          settings={project.settings}
+          size={14}
+          className={clsx('grid shrink-0 place-items-center', !node.union && 'text-slate-400')}
+        />
         {editing ? (
           <input
             autoFocus

@@ -9,11 +9,12 @@ import clsx from 'clsx';
 
 interface IconProps {
   className?: string;
+  style?: React.CSSProperties;
 }
 
 const base = 'shrink-0';
 
-function Svg({ className, children }: IconProps & { children: React.ReactNode }) {
+function Svg({ className, style, children }: IconProps & { children: React.ReactNode }) {
   return (
     <svg
       viewBox="0 0 24 24"
@@ -24,6 +25,7 @@ function Svg({ className, children }: IconProps & { children: React.ReactNode })
       strokeLinejoin="round"
       aria-hidden="true"
       className={clsx(base, className)}
+      style={style}
     >
       {children}
     </svg>
@@ -131,19 +133,51 @@ export function EyeIcon({ className }: IconProps) {
 }
 
 /** Two overlapping shapes merged into one body: a union object (ADR-0028). */
-export function UnionIcon({ className }: IconProps) {
+export function UnionIcon({ className, style }: IconProps) {
   return (
-    <Svg className={className}>
+    <Svg className={className} style={style}>
       <path d="M4 4h10v6h6v10H10v-6H4Z" />
     </Svg>
   );
 }
 
 /** Folder: stands for a group in the layer tree (groups have no colour of their own). */
-export function FolderIcon({ className }: IconProps) {
+export function FolderIcon({ className, style }: IconProps) {
+  return (
+    <Svg className={className} style={style}>
+      <path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4l2 2.5h7A1.5 1.5 0 0 1 19 10v7.5A1.5 1.5 0 0 1 17.5 19h-13A1.5 1.5 0 0 1 3 17.5Z" />
+    </Svg>
+  );
+}
+
+/** Two shapes pulled apart: a union dissolved into its pieces. */
+export function SplitIcon({ className }: IconProps) {
   return (
     <Svg className={className}>
-      <path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4l2 2.5h7A1.5 1.5 0 0 1 19 10v7.5A1.5 1.5 0 0 1 17.5 19h-13A1.5 1.5 0 0 1 3 17.5Z" />
+      <rect x="2" y="2" width="11" height="11" rx="1.5" />
+      <circle cx="17" cy="17" r="5" />
+    </Svg>
+  );
+}
+
+/** Folder with elements coming out of it: a plain group dissolved into its children. */
+export function UngroupIcon({ className }: IconProps) {
+  return (
+    <Svg className={className}>
+      <path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4l2 2.5h7A1.5 1.5 0 0 1 19 10v2" />
+      <path d="M3 10v7.5A1.5 1.5 0 0 0 4.5 19h4" />
+      <path d="M16.5 12v8" />
+      <path d="m13.5 17 3 3 3-3" />
+    </Svg>
+  );
+}
+
+/** Pencil: renaming a row in place. */
+export function RenameIcon({ className }: IconProps) {
+  return (
+    <Svg className={className}>
+      <path d="M4 20h4L19.5 8.5a2.5 2.5 0 0 0-3.5-3.5L4.5 16.5Z" />
+      <path d="m14 6.5 3.5 3.5" />
     </Svg>
   );
 }

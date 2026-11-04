@@ -342,8 +342,9 @@ export interface UngroupResult {
 }
 
 /**
- * Dissolves a group (ADR-0026): its children take its place in the parent and the group itself is
- * removed from the overlay. A union is not a plain group — «Разъединить» clears its flag first.
+ * Dissolves a container (ADR-0026): its children take its place in the parent and the container
+ * itself is removed from the overlay. A union is dissolved the same way — «Разъединить» lifts its
+ * pieces up and drops the union flag with the group.
  */
 export function ungroupInTree(
   document: SvgDocument,
@@ -360,14 +361,17 @@ export function ungroupInTree(
   for (const child of group.children) parents[child.id] = parentId;
   delete parents[nodeId];
 
+  // A dissolved union is not a union any more: its flag goes with the container. This also covers
+  // unions the parser made (they only exist in the document), where the removal is enough.
+  const next: TreeEdit = {
+    ...edit,
+    parents,
+    removed: Array.from(new Set([...edit.removed, nodeId])),
+    groups: edit.groups.filter((id) => id !== nodeId),
+  };
+
   return {
-    edit: {
-      ...edit,
-      parents,
-      removed: Array.from(new Set([...edit.removed, nodeId])),
-      groups: edit.groups.filter((id) => id !== nodeId),
-      unions: edit.unions.filter((id) => id !== nodeId),
-    },
+    edit: clearUnions(next, [nodeId]) ?? next,
     parentId,
     movedIds: group.children.map((child) => child.id),
   };

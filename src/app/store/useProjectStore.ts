@@ -54,7 +54,6 @@ import {
   orderKeyFor,
   createGroup,
   markUnions,
-  clearUnions,
   ungroupInTree,
   moveNodesInTree,
   removeFromTree,
@@ -554,52 +553,17 @@ export const useProjectStore = create<AppState>()((set, get) => ({
   },
 
   ungroupSelected: () => {
-    const { project, selectedIds } = get();
-    if (!project || selectedIds.length !== 1) return;
-    const nodeId = selectedIds[0];
-    const result = ungroupInTree(project.document, project.tree, nodeId);
-    if (!result) return;
-
-    const parent =
-      result.parentId === ''
-        ? project.document.root
-        : findNode(project.document.root, result.parentId);
-    const siblings = parent
-      ? orderedChildren(parent, project.settings).map((child) => child.id)
-      : [];
-    const position = siblings.indexOf(nodeId);
-    const order = siblings.filter((id) => id !== nodeId);
-    order.splice(position < 0 ? order.length : position, 0, ...result.movedIds);
-
-    const parentKey = orderKeyFor(project.document, result.parentId);
-    const settings = {
-      ...project.settings,
-      [parentKey]: { ...(project.settings[parentKey] ?? {}), childOrder: order },
-    };
-    // The group is gone: its own settings go with it, the children keep theirs.
-    delete settings[nodeId];
-
-    pushHistory(set, get, 'ungroup');
-    set({
-      project: {
-        ...project,
-        tree: result.edit,
-        document: applyTreeEdit(get().baseDocument, result.edit),
-        settings,
-      },
-      selectedIds: result.movedIds,
-    });
-    scheduleRebuild(set, get, 0);
+    const { selectedIds } = get();
+    if (selectedIds.length !== 1) return;
+    dissolve(set, get, selectedIds[0], 'ungroup');
   },
 
   ununionSelected: () => {
     const { project, selectedIds } = get();
-    if (!project || selectedIds.length === 0) return;
-    const tree = clearUnions(project.tree, selectedIds);
-    if (!tree) return;
-    pushHistory(set, get, 'ununion');
-    set({ project: { ...project, tree, document: applyTreeEdit(get().baseDocument, tree) } });
-    scheduleRebuild(set, get, 0);
+    if (!project || selectedIds.length !== 1) return;
+    const node = findNode(project.document.root, selectedIds[0]);
+    if (node?.union !== true) return;
+    dissolve(set, get, node.id, 'ununion');
   },
 
   toggleCollapsed: (nodeId) => {
@@ -972,6 +936,48 @@ function applyAppView(set: SetState, get: GetState, settings: AppSettings): void
         }
       : {}),
   });
+}
+
+/**
+ * Dissolves a container (a plain group or a union) into its place: the children take the spot the
+ * container occupied, keep their own settings, and the container itself disappears with its settings.
+ * For a union this is what «Разъединить» does — no group is left behind, the pieces are simply
+ * separate elements again.
+ */
+function dissolve(set: SetState, get: GetState, nodeId: string, label: string): void {
+  const { project } = get();
+  if (!project) return;
+  const result = ungroupInTree(project.document, project.tree, nodeId);
+  if (!result) return;
+
+  const parent =
+    result.parentId === ''
+      ? project.document.root
+      : findNode(project.document.root, result.parentId);
+  const siblings = parent ? orderedChildren(parent, project.settings).map((child) => child.id) : [];
+  const position = siblings.indexOf(nodeId);
+  const order = siblings.filter((id) => id !== nodeId);
+  order.splice(position < 0 ? order.length : position, 0, ...result.movedIds);
+
+  const parentKey = orderKeyFor(project.document, result.parentId);
+  const settings = {
+    ...project.settings,
+    [parentKey]: { ...(project.settings[parentKey] ?? {}), childOrder: order },
+  };
+  // The container is gone: its own settings go with it, the children keep theirs.
+  delete settings[nodeId];
+
+  pushHistory(set, get, label);
+  set({
+    project: {
+      ...project,
+      tree: result.edit,
+      document: applyTreeEdit(get().baseDocument, result.edit),
+      settings,
+    },
+    selectedIds: result.movedIds,
+  });
+  scheduleRebuild(set, get, 0);
 }
 
 /** Name of a group created by «Объединить». */

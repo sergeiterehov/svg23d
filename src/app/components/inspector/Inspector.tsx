@@ -1,5 +1,6 @@
 import { fallbackFillOf, findNode, type PartInfo } from '@core/solver/resolveLeaves';
 import { effectiveSettingsFor } from '@core/solver/inheritance';
+import { orderedChildren } from '@core/solver/order';
 import { collectSubtreeIds, findUnionOwner } from '@core/solver/selection';
 import type { BBox3, LeafStats, NodeSettings, ResolvedLeaf, SvgDocNode } from '@core/model/types';
 import { useProjectStore, type BuildResultState } from '../../store/useProjectStore';
@@ -24,6 +25,7 @@ import {
   SizeIcon,
 } from '../common/Icon';
 import { SelectField } from '../common/Select';
+import { NodeIcon } from '../common/NodeIcon';
 
 /**
  * Right panel shows exactly one mode (ADR-0006 UI note): settings of the selected element,
@@ -98,7 +100,13 @@ function ElementPanel({ node }: { node: SvgDocNode }) {
     <>
       <FieldSection title="Элемент" right={<BackToProject />}>
         <div className="flex items-center gap-2">
-          <ColorChip color={node.fill} size={14} />
+          <NodeIcon
+            node={node}
+            root={project.document.root}
+            settings={project.settings}
+            size={14}
+            className="grid shrink-0 place-items-center text-slate-400"
+          />
           <div className="min-w-0">
             <div className="truncate text-sm font-medium text-slate-100">{node.name}</div>
             <div className="truncate text-[10px] text-slate-500">
@@ -280,7 +288,52 @@ function ElementPanel({ node }: { node: SvgDocNode }) {
           </FieldSection>
         </>
       )}
+
+      <ElementsSection node={node} />
     </>
+  );
+}
+
+/**
+ * Contents of the selected container as a plain list — a union is one printed body, so its «Результат»
+ * is about the body and this block is about what the body is made of. A row selects that element.
+ */
+function ElementsSection({ node }: { node: SvgDocNode }) {
+  const project = useProjectStore((s) => s.project);
+  const select = useProjectStore((s) => s.select);
+
+  if (!project || node.children.length === 0) return null;
+  // Same order as the tree: the top row is the element drawn last.
+  const children = [...orderedChildren(node, project.settings)].reverse();
+
+  return (
+    <FieldSection title="Элементы" hint="Состав контейнера. Клик по строке выбирает элемент.">
+      <ul className="flex flex-col gap-0.5">
+        {children.map((child) => (
+          <li key={child.id}>
+            <button
+              type="button"
+              onClick={() => select(child.id)}
+              className="flex w-full items-center gap-2 rounded px-1 py-1 text-left text-[11px] text-slate-300 transition hover:bg-slate-800/70 hover:text-white"
+            >
+              <NodeIcon
+                node={child}
+                root={project.document.root}
+                settings={project.settings}
+                size={11}
+                className="grid shrink-0 place-items-center text-slate-400"
+              />
+              <span className="truncate">{child.name}</span>
+              {child.kind === 'group' && child.children.length > 0 && (
+                <span className="ml-auto shrink-0 text-[10px] tabular-nums text-slate-500">
+                  {child.children.length}
+                </span>
+              )}
+            </button>
+          </li>
+        ))}
+      </ul>
+    </FieldSection>
   );
 }
 
@@ -745,8 +798,9 @@ function StatsPanel() {
 
   const root = project?.document.root ?? null;
   const selected = root && selectedIds.length === 1 ? findNode(root, selectedIds[0]) : null;
-  // A part of a union has no body of its own: the numbers belong to the whole merged object.
-  const node = selected && root ? (findUnionOwner(root, selected.id) ?? selected) : null;
+  // A part of a union prints only as part of the merged body: the numbers would belong to the body,
+  // not to the piece, so the panel shows nothing at all rather than someone else's figures.
+  if (selected && root && findUnionOwner(root, selected.id)) return null;
 
   return (
     <section className="px-3 py-2.5">
@@ -754,7 +808,7 @@ function StatsPanel() {
 
       {!result || !project ? (
         <EmptyStats />
-      ) : !node ? (
+      ) : !selected ? (
         <>
           <dl className="mt-2 space-y-1 text-[11px]">
             <Row label="Деталей" value={String(result.stats.partCount)} />
@@ -766,7 +820,7 @@ function StatsPanel() {
           {parts.length > 1 && <PartList parts={parts} />}
         </>
       ) : (
-        <SelectionStats node={node} result={result} parts={parts} leaves={leaves} />
+        <SelectionStats node={selected} result={result} leaves={leaves} />
       )}
     </section>
   );
@@ -789,12 +843,10 @@ function EmptyStats() {
 function SelectionStats({
   node,
   result,
-  parts,
   leaves,
 }: {
   node: SvgDocNode;
   result: BuildResultState;
-  parts: PartInfo[];
   leaves: ResolvedLeaf[];
 }) {
   const subtree = collectSubtreeIds(node);
@@ -815,19 +867,16 @@ function SelectionStats({
   const triangles = stats.reduce((sum, item) => sum + item.triangleCount, 0);
   const box = unionBoxes(stats.map((item) => item.bbox));
 
-  const partIds = new Set(nodeLeaves.map((leaf) => leaf.partId));
-  const groupParts = parts.filter((part) => partIds.has(part.id));
-
   return (
-    <>
-      <dl className="mt-2 space-y-1 text-[11px]">
-        {node.kind === 'group' && <Row label="Элементов" value={String(stats.length)} />}
-        <Row label="Треугольников" value={triangles.toLocaleString('ru-RU')} />
-        <Row label="Объём" value={formatVolume(volume)} />
-        <Row label="Габариты" value={formatBox(box)} />
-      </dl>
-      {node.kind === 'group' && groupParts.length > 0 && <PartList parts={groupParts} />}
-    </>
+    <dl className="mt-2 space-y-1 text-[11px]">
+      {/* A union is always one element: the composition is in the «Элементы» block instead. */}
+      {node.kind === 'group' && !node.union && (
+        <Row label="Элементов" value={String(stats.length)} />
+      )}
+      <Row label="Треугольников" value={triangles.toLocaleString('ru-RU')} />
+      <Row label="Объём" value={formatVolume(volume)} />
+      <Row label="Габариты" value={formatBox(box)} />
+    </dl>
   );
 }
 
