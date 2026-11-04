@@ -273,11 +273,12 @@ export const useProjectStore = create<AppState>()((set, get) => ({
     const settings = loadAppSettings();
     if (settings) set({ viewMode: settings.viewMode });
     try {
-      const library = await listProjects();
+      // Storage that does not answer must not leave the app on the splash screen.
+      const library = await withTimeout(listProjects(), []);
       set({ library });
       const lastId = loadLastProjectId();
       const target = library.find((item) => item.id === lastId) ?? library[0];
-      if (target) await get().openLibraryProject(target.id);
+      if (target) await withTimeout(get().openLibraryProject(target.id), undefined);
       else if (settings) applyAppView(set, get, settings);
     } catch {
       // Without IndexedDB the editor works as before, only the history is missing.
@@ -402,9 +403,12 @@ export const useProjectStore = create<AppState>()((set, get) => ({
 
   loadSvgText: (text, fileName) => {
     try {
-      // Project defaults set before the import survive it: they describe the machine and the
-      // material, not the document.
-      const global = { ...(get().project?.global ?? DEFAULT_GLOBAL_SETTINGS) };
+      // An import starts a **new** project, so geometry defaults are the factory ones — heights,
+      // size, tolerance and quality of whatever was open do not travel with the file (ADR-0032).
+      // Only the view is kept: how the user looks at the model belongs to the person, not the artwork.
+      const view =
+        loadAppSettings()?.view ?? get().project?.global.view ?? DEFAULT_GLOBAL_SETTINGS.view;
+      const global: GlobalSettings = { ...DEFAULT_GLOBAL_SETTINGS, view };
       lastCommit = null;
       set(
         projectStateFrom({
@@ -823,6 +827,14 @@ function mergePatches(
 export function projectNameFromFile(fileName: string): string {
   const name = fileName.replace(/\.[^.]+$/, '').trim();
   return name === '' ? UNTITLED_PROJECT_NAME : name;
+}
+
+/** Resolves with `fallback` if the promise takes too long: IndexedDB can block, the app cannot. */
+function withTimeout<T>(promise: Promise<T>, fallback: T, ms = 3000): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms)),
+  ]);
 }
 
 function newProjectId(): string {

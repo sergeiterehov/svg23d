@@ -60,6 +60,38 @@ describe('library', () => {
     expect(useProjectStore.getState().project?.source).toBe(source);
   });
 
+  it('starts a new import from the factory defaults, not from the open project', async () => {
+    useProjectStore.getState().importSvg(svg('#ff0000'), 'one.svg');
+    useProjectStore
+      .getState()
+      .updateGlobal({ defaultZTo: 55, fitSizeMm: 120, defaultClearance: 0.5, flatness: 0.005 });
+    expect(useProjectStore.getState().project?.global.defaultZTo).toBe(55);
+
+    useProjectStore.getState().importSvg(svg('#00ff00'), 'two.svg');
+    const global = useProjectStore.getState().project?.global;
+    expect(global?.defaultZTo).toBe(DEFAULT_GLOBAL_SETTINGS.defaultZTo);
+    expect(global?.defaultZFrom).toBe(DEFAULT_GLOBAL_SETTINGS.defaultZFrom);
+    expect(global?.fitSizeMm).toBe(DEFAULT_GLOBAL_SETTINGS.fitSizeMm);
+    expect(global?.defaultClearance).toBe(DEFAULT_GLOBAL_SETTINGS.defaultClearance);
+    expect(global?.flatness).toBe(DEFAULT_GLOBAL_SETTINGS.flatness);
+    // Per-element settings of the previous project do not follow the new file either.
+    expect(Object.keys(useProjectStore.getState().project?.settings ?? {})).toHaveLength(0);
+  });
+
+  it('keeps the display settings across an import', () => {
+    const view = {
+      ...DEFAULT_GLOBAL_SETTINGS.view,
+      lighting: 'flat' as const,
+      mode2d: 'asis' as const,
+    };
+    saveAppSettings({ viewMode: '2d', view });
+
+    useProjectStore.getState().importSvg(svg('#ff0000'), 'one.svg');
+    const global = useProjectStore.getState().project?.global;
+    expect(global?.view.lighting).toBe('flat');
+    expect(global?.view.mode2d).toBe('asis');
+  });
+
   it('asks before importing a file whose name is already in the history', async () => {
     useProjectStore.getState().importSvg(svg('#ff0000'), 'logo.svg');
     await useProjectStore.getState().persist();

@@ -25,9 +25,11 @@ export default function App() {
   const fileInput = useRef<HTMLInputElement>(null);
 
   // Read the browser library and reopen the last project before anything is drawn (ADR-0031).
+  // Keyed on `hydrated` as well: replacing the store module (HMR in dev) resets the flag, and the
+  // session has to be read again instead of leaving the app on the splash screen.
   useEffect(() => {
-    bootstrap();
-  }, []);
+    if (!hydrated) bootstrap();
+  }, [hydrated]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
