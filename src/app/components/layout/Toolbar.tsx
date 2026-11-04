@@ -3,6 +3,7 @@ import { useProjectStore } from '../../store/useProjectStore';
 import { OpenIcon, RedoIcon, SaveIcon, UndoIcon } from '../common/Icon';
 import { IconButton } from '../common/IconButton';
 import { useTooltip } from '../common/Tooltip';
+import { ProjectMenu } from './ProjectMenu';
 
 const iconClass =
   'h-7 w-7 rounded-md border border-transparent hover:border-slate-700 hover:bg-slate-800 hover:text-slate-100';
@@ -34,11 +35,7 @@ export function Toolbar({ onOpenFile }: ToolbarProps) {
         <span className="text-[10px] uppercase tracking-wider text-slate-500">SVG → 3D</span>
       </div>
 
-      {project && (
-        <span className="max-w-48 truncate rounded bg-slate-800 px-2 py-0.5 text-[11px] text-slate-300">
-          {project.document.fileName}
-        </span>
-      )}
+      <ProjectMenu />
 
       <div className="ml-auto flex items-center gap-2">
         <div className="flex items-center gap-0.5">

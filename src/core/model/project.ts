@@ -25,8 +25,9 @@ export interface ProjectFile {
 export const PROJECT_FILE_EXTENSION = 'svg23d.json';
 export const PROJECT_MIME = 'application/json';
 
-export function serializeProject(project: Project): string {
-  const file: ProjectFile = {
+/** The project in its file shape: what is downloaded and what the browser library stores. */
+export function projectFileOf(project: Project): ProjectFile {
+  return {
     app: 'svg23d',
     version: PROJECT_VERSION,
     fileName: project.fileName,
@@ -35,7 +36,10 @@ export function serializeProject(project: Project): string {
     settings: project.settings,
     tree: project.tree,
   };
-  return JSON.stringify(file, null, 2);
+}
+
+export function serializeProject(project: Project): string {
+  return JSON.stringify(projectFileOf(project), null, 2);
 }
 
 export function parseProjectFile(text: string): ProjectFile {

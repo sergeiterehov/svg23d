@@ -11,15 +11,23 @@ import { Preview2D } from './components/preview/Preview2D';
 import { Preview3D } from './components/preview/Preview3D';
 import { Inspector } from './components/inspector/Inspector';
 import { ViewSettingsPopover } from './components/preview/ViewSettingsPopover';
+import { ImportConflictDialog } from './components/layout/ImportConflictDialog';
 import { HelpHint } from './components/common/Icon';
+import { bootstrap } from './storage/persistence';
 
 export default function App() {
   const isEmpty = useProjectStore((s) => (s.project ? isEmptyDocument(s.project.document) : true));
   const viewMode = useProjectStore((s) => s.viewMode);
   const setViewMode = useProjectStore((s) => s.setViewMode);
   const select = useProjectStore((s) => s.select);
+  const hydrated = useProjectStore((s) => s.hydrated);
   // The picker lives here, next to the shortcut, and the toolbar button uses the same input.
   const fileInput = useRef<HTMLInputElement>(null);
+
+  // Read the browser library and reopen the last project before anything is drawn (ADR-0031).
+  useEffect(() => {
+    bootstrap();
+  }, []);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
@@ -77,6 +85,15 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
 
+  // Nothing to show until the stored session is read: otherwise the empty project flashes first.
+  if (!hydrated) {
+    return (
+      <div className="grid h-full place-items-center bg-slate-950 text-xs text-slate-500">
+        Открываем последний проект…
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-full flex-col bg-slate-950 text-slate-200">
       <Toolbar onOpenFile={() => fileInput.current?.click()} />
@@ -94,7 +111,7 @@ export default function App() {
             // this file picker too.
             const state = useProjectStore.getState();
             if (/\.svg$/i.test(file.name))
-              void file.text().then((text) => state.loadSvgText(text, file.name));
+              void file.text().then((text) => state.importSvg(text, file.name));
             else void file.text().then((text) => state.openProject(text));
           }
           event.target.value = '';
@@ -163,6 +180,7 @@ export default function App() {
       </div>
 
       <StatusBar />
+      <ImportConflictDialog />
     </div>
   );
 }

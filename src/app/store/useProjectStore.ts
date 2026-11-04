@@ -18,10 +18,30 @@ import {
   PROJECT_FILE_EXTENSION,
   PROJECT_MIME,
   parseProjectFile,
+  projectFileOf,
   serializeProject,
 } from '@core/model/project';
+import {
+  deleteProject as deleteProjectRecord,
+  getProject as getProjectRecord,
+  listProjects,
+  putProject,
+  type ProjectRecord,
+  type ProjectSummary,
+} from '../storage/projectsDb';
+import {
+  loadAppSettings,
+  loadLastProjectId,
+  saveLastProjectId,
+  type AppSettings,
+} from '../storage/appSettings';
 import { parseSvg, SvgParseError } from '@core/svg/parseSvg';
-import { createEmptyDocument, createEmptyProject, isEmptyDocument } from '@core/model/empty';
+import {
+  UNTITLED_PROJECT_NAME,
+  createEmptyDocument,
+  createEmptyProject,
+  isEmptyDocument,
+} from '@core/model/empty';
 import { constrainGlobalPatch, constrainNodePatch } from '@core/model/limits';
 import { resolveLeaves, type PartInfo } from '@core/solver/resolveLeaves';
 import { findNode } from '@core/solver/resolveLeaves';
@@ -103,6 +123,17 @@ function getClient(): GeometryClient {
   return client;
 }
 
+/**
+ * An SVG import that collides with a project of the same name (ADR-0031): the user chooses between
+ * a new project and the existing one.
+ */
+export interface PendingImport {
+  text: string;
+  fileName: string;
+  existingId: string;
+  existingName: string;
+}
+
 export interface BuildResultState {
   parts: PartMesh[];
   stats: BuildStats;
@@ -132,7 +163,32 @@ interface AppState {
   exporting: boolean;
   past: Snapshot[];
   future: Snapshot[];
+  /** Projects kept in the browser, most recently edited first. */
+  library: ProjectSummary[];
+  /** Guid of the open project; `null` for a project that has never been stored. */
+  projectId: string | null;
+  /** Editable display name of the open project. */
+  projectName: string;
+  projectCreatedAt: number;
+  /** False until the browser storage has been read: the app waits before painting the workspace. */
+  hydrated: boolean;
+  pendingImport: PendingImport | null;
 
+  /** Reads the library and opens the last project (once, at startup). */
+  hydrate: () => Promise<void>;
+  /** Imports an SVG; if a project with the same name exists, asks first. */
+  importSvg: (text: string, fileName: string) => void;
+  /** Answers that question: a new project or the existing one. */
+  resolveImport: (choice: 'new' | 'existing') => void;
+  cancelImport: () => void;
+  openLibraryProject: (id: string) => Promise<void>;
+  renameProject: (name: string) => void;
+  /** Renames an entry of the history without opening it. */
+  renameLibraryProject: (id: string, name: string) => Promise<void>;
+  deleteLibraryProject: (id: string) => Promise<void>;
+  /** Writes the open project into the browser library. */
+  persist: () => Promise<void>;
+  /** Kept for the import path only: always stores into a fresh record. */
   loadSvgText: (text: string, fileName: string) => void;
   loadExample: (id: ExampleId) => void;
   openProject: (text: string) => void;
@@ -206,37 +262,164 @@ export const useProjectStore = create<AppState>()((set, get) => ({
   exporting: false,
   past: [],
   future: [],
+  library: [],
+  projectId: null,
+  projectName: UNTITLED_PROJECT_NAME,
+  projectCreatedAt: 0,
+  hydrated: false,
+  pendingImport: null,
+
+  hydrate: async () => {
+    const settings = loadAppSettings();
+    if (settings) set({ viewMode: settings.viewMode });
+    try {
+      const library = await listProjects();
+      set({ library });
+      const lastId = loadLastProjectId();
+      const target = library.find((item) => item.id === lastId) ?? library[0];
+      if (target) await get().openLibraryProject(target.id);
+      else if (settings) applyAppView(set, get, settings);
+    } catch {
+      // Without IndexedDB the editor works as before, only the history is missing.
+    }
+    set({ hydrated: true });
+  },
+
+  importSvg: (text, fileName) => {
+    const name = projectNameFromFile(fileName);
+    const existing = get().library.find((item) => item.name.toLowerCase() === name.toLowerCase());
+    if (existing) {
+      set({
+        pendingImport: {
+          text,
+          fileName,
+          existingId: existing.id,
+          existingName: existing.name,
+        },
+      });
+      return;
+    }
+    get().loadSvgText(text, fileName);
+  },
+
+  resolveImport: (choice) => {
+    const pending = get().pendingImport;
+    if (!pending) return;
+    set({ pendingImport: null });
+    if (choice === 'existing') void get().openLibraryProject(pending.existingId);
+    else get().loadSvgText(pending.text, pending.fileName);
+  },
+
+  cancelImport: () => set({ pendingImport: null }),
+
+  openLibraryProject: async (id) => {
+    // Already open: a click on the current row must not reload it (and must not touch the edit date).
+    if (get().projectId === id) return;
+    const record = await getProjectRecord(id);
+    if (!record) return;
+    lastCommit = null;
+
+    const next = projectStateFrom({
+      source: record.source,
+      fileName: record.fileName,
+      name: record.name,
+      id: record.id,
+      tree: record.tree,
+      settings: record.settings,
+      global: record.global,
+      createdAt: record.createdAt,
+    });
+    // Display settings belong to the person, not to the project: they win over the stored view.
+    // They are merged into the same update, so "opening" is a single change of identity — and the
+    // autosave (which keys on the project id) leaves the edit date alone.
+    const settings = loadAppSettings();
+    if (settings) {
+      const project = next.project as Project;
+      next.project = {
+        ...project,
+        global: { ...project.global, view: { ...project.global.view, ...settings.view } },
+      };
+      next.viewMode = settings.viewMode;
+    }
+
+    set(next);
+    saveLastProjectId(record.id);
+    scheduleRebuild(set, get, 0);
+  },
+
+  renameProject: (name) => {
+    const trimmed = name.trim();
+    if (trimmed === '' || trimmed === get().projectName) return;
+    set({ projectName: trimmed });
+  },
+
+  renameLibraryProject: async (id, name) => {
+    const trimmed = name.trim();
+    if (trimmed === '') return;
+    if (get().projectId === id) {
+      get().renameProject(trimmed);
+      return;
+    }
+    const record = await getProjectRecord(id);
+    if (!record || record.name === trimmed) return;
+    await putProject({ ...record, name: trimmed });
+    set({ library: await listProjects() });
+  },
+
+  deleteLibraryProject: async (id) => {
+    await deleteProjectRecord(id);
+    const library = await listProjects();
+    set({ library });
+    if (get().projectId !== id) return;
+    const next = library[0];
+    if (next) await get().openLibraryProject(next.id);
+    else {
+      get().reset();
+      saveLastProjectId(null);
+    }
+  },
+
+  persist: async () => {
+    const { project, projectId, projectName, projectCreatedAt } = get();
+    // An empty document is not a project worth keeping: it is the "nothing opened" state.
+    if (!project || !projectId || project.source.trim() === '') return;
+    const now = Date.now();
+    const record: ProjectRecord = {
+      ...projectFileOf(project),
+      id: projectId,
+      name: projectName,
+      createdAt: projectCreatedAt || now,
+      updatedAt: now,
+    };
+    try {
+      await putProject(record);
+      set({ library: await listProjects() });
+      saveLastProjectId(projectId);
+    } catch {
+      // The history is a convenience: the project can still be downloaded as a file.
+    }
+  },
 
   loadSvgText: (text, fileName) => {
     try {
       // Project defaults set before the import survive it: they describe the machine and the
       // material, not the document.
       const global = { ...(get().project?.global ?? DEFAULT_GLOBAL_SETTINGS) };
-      const base = parseSvg(text, { fileName, global });
-      const document = applyTreeEdit(base, EMPTY_TREE_EDIT);
-      const project: Project = {
-        version: PROJECT_VERSION,
-        fileName,
-        source: text,
-        document,
-        tree: EMPTY_TREE_EDIT,
-        settings: {},
-        global,
-      };
       lastCommit = null;
-      set({
-        project,
-        baseDocument: base,
-        parsedSignature: parseSignature(global),
-        selectedIds: [],
-        hoveredId: null,
-        result: null,
-        error: null,
-        status: isEmptyDocument(document) ? 'empty' : 'building',
-        past: [],
-        future: [],
-      });
+      set(
+        projectStateFrom({
+          source: text,
+          fileName,
+          name: projectNameFromFile(fileName),
+          id: newProjectId(),
+          tree: EMPTY_TREE_EDIT,
+          settings: {},
+          global,
+          createdAt: Date.now(),
+        }),
+      );
       scheduleRebuild(set, get, 0);
+      void get().persist();
     } catch (error) {
       const message =
         error instanceof SvgParseError
@@ -250,33 +433,22 @@ export const useProjectStore = create<AppState>()((set, get) => ({
   openProject: (text) => {
     try {
       const file = parseProjectFile(text);
-      const base = file.source.trim()
-        ? parseSvg(file.source, { fileName: file.fileName, global: file.global })
-        : createEmptyDocument(file.fileName);
-      const document = applyTreeEdit(base, file.tree);
-      const project: Project = {
-        version: PROJECT_VERSION,
-        fileName: file.fileName,
-        source: file.source,
-        document,
-        tree: file.tree,
-        settings: file.settings,
-        global: file.global,
-      };
       lastCommit = null;
-      set({
-        project,
-        baseDocument: base,
-        parsedSignature: parseSignature(file.global),
-        selectedIds: [],
-        hoveredId: null,
-        result: null,
-        error: null,
-        status: isEmptyDocument(document) ? 'empty' : 'building',
-        past: [],
-        future: [],
-      });
+      // A downloaded file is a copy: it gets its own guid so both can live in the history.
+      set(
+        projectStateFrom({
+          source: file.source,
+          fileName: file.fileName,
+          name: projectNameFromFile(file.fileName),
+          id: newProjectId(),
+          tree: file.tree,
+          settings: file.settings,
+          global: file.global,
+          createdAt: Date.now(),
+        }),
+      );
       scheduleRebuild(set, get, 0);
+      void get().persist();
     } catch (error) {
       set({ status: 'error', error: (error as Error).message });
     }
@@ -438,7 +610,7 @@ export const useProjectStore = create<AppState>()((set, get) => ({
 
   loadExample: (id) => {
     const example = EXAMPLES[id];
-    get().loadSvgText(example.source, example.fileName);
+    get().importSvg(example.source, example.fileName);
   },
 
   /** Stacks the parts in Z with a small overlap so upper parts cut sockets in lower ones. */
@@ -597,6 +769,10 @@ export const useProjectStore = create<AppState>()((set, get) => ({
       project: createEmptyProject(),
       baseDocument: createEmptyDocument(),
       parsedSignature: null,
+      projectId: null,
+      projectName: UNTITLED_PROJECT_NAME,
+      projectCreatedAt: 0,
+      pendingImport: null,
       leaves: [],
       parts: [],
       modelSize: null,
@@ -641,6 +817,78 @@ function mergePatches(
     settings[nodeId] = next;
   }
   return settings;
+}
+
+/** Display name of an import: the file name without its extension. */
+export function projectNameFromFile(fileName: string): string {
+  const name = fileName.replace(/\.[^.]+$/, '').trim();
+  return name === '' ? UNTITLED_PROJECT_NAME : name;
+}
+
+function newProjectId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `p-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+interface OpenStateInput {
+  source: string;
+  fileName: string;
+  name: string;
+  id: string | null;
+  tree: TreeEdit;
+  settings: Record<string, NodeSettings>;
+  global: GlobalSettings;
+  createdAt: number;
+}
+
+/** Everything a freshly opened project replaces in the store (ADR-0031). */
+function projectStateFrom(input: OpenStateInput): Partial<AppState> {
+  const base = input.source.trim()
+    ? parseSvg(input.source, { fileName: input.fileName, global: input.global })
+    : createEmptyDocument(input.fileName);
+  const document = applyTreeEdit(base, input.tree);
+  const project: Project = {
+    version: PROJECT_VERSION,
+    fileName: input.fileName,
+    source: input.source,
+    document,
+    tree: input.tree,
+    settings: input.settings,
+    global: input.global,
+  };
+  return {
+    project,
+    baseDocument: base,
+    parsedSignature: parseSignature(input.global),
+    projectId: input.id,
+    projectName: input.name,
+    projectCreatedAt: input.createdAt,
+    selectedIds: [],
+    hoveredId: null,
+    result: null,
+    error: null,
+    status: isEmptyDocument(document) ? 'empty' : 'building',
+    past: [],
+    future: [],
+  };
+}
+
+/** App-wide display settings live apart from the projects and win over the project's own view. */
+function applyAppView(set: SetState, get: GetState, settings: AppSettings): void {
+  const project = get().project;
+  set({
+    viewMode: settings.viewMode,
+    ...(project
+      ? {
+          project: {
+            ...project,
+            global: { ...project.global, view: { ...project.global.view, ...settings.view } },
+          },
+        }
+      : {}),
+  });
 }
 
 /** Name of a group created by «Объединить». */

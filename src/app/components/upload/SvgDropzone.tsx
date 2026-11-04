@@ -5,7 +5,7 @@ import { ExamplesMenu } from './ExamplesMenu';
 
 /** Drag & drop / file picker; compact mode is the block at the top of the layers panel. */
 export function SvgDropzone({ compact = false }: { compact?: boolean }) {
-  const loadSvgText = useProjectStore((s) => s.loadSvgText);
+  const importSvg = useProjectStore((s) => s.importSvg);
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -17,7 +17,7 @@ export function SvgDropzone({ compact = false }: { compact?: boolean }) {
     }
     setError(null);
     const text = await file.text();
-    loadSvgText(text, file.name);
+    importSvg(text, file.name);
   };
 
   return (

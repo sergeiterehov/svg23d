@@ -3,7 +3,6 @@ import clsx from 'clsx';
 import { useProjectStore, type Status } from '../../store/useProjectStore';
 import { ResetIcon } from '../common/Icon';
 import { IconButton } from '../common/IconButton';
-import { ExamplesMenu } from '../upload/ExamplesMenu';
 
 export function StatusBar() {
   const warnings = useProjectStore((s) => s.warnings);
@@ -53,12 +52,6 @@ export function StatusBar() {
             · {(result.stats.volume / 1000).toFixed(2)} см³
           </span>
         )}
-
-        {/* Always available: the upload panel only exists for the empty state. */}
-        <ExamplesMenu
-          direction="up"
-          triggerClassName="rounded px-1.5 py-0.5 text-slate-400 hover:bg-slate-800 hover:text-slate-100"
-        />
 
         <div className="ml-auto flex items-center gap-1">
           {/* Warnings come first so the rebuild button keeps the rightmost place whatever happens. */}
