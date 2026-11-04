@@ -1,8 +1,9 @@
 import { create } from 'zustand';
-import { DEFAULT_GLOBAL_SETTINGS } from '@core/model/defaults';
+import { DEFAULT_GLOBAL_SETTINGS, leafContours } from '@core/model/defaults';
 import {
   PROJECT_VERSION,
   type BuildStats,
+  type Contour,
   type DocumentWarning,
   type GlobalSettings,
   type LeafStats,
@@ -32,6 +33,8 @@ import {
   applyTreeEdit,
   orderKeyFor,
   createGroup,
+  markUnions,
+  clearUnions,
   moveNodesInTree,
   removeFromTree,
   renameInTree,
@@ -133,6 +136,13 @@ interface AppState {
   redo: () => void;
   /** Wraps the selection in a new group (⌘G) and selects it. */
   groupSelected: () => void;
+  /**
+   * Makes one printed object out of the selection: the shapes are unioned on the 2D level and the
+   * settings of the parts are ignored (ADR-0028).
+   */
+  unionSelected: () => void;
+  /** Turns a union made by the tool back into a plain group. */
+  ununionSelected: () => void;
   /** Renames an element or a group; empty names are ignored. */
   renameNode: (nodeId: string, name: string) => void;
   /** Drag & drop: puts `nodeId` next to `targetId` or inside it when it is a group. */
@@ -317,40 +327,36 @@ export const useProjectStore = create<AppState>()((set, get) => ({
   },
 
   groupSelected: () => {
+    const { selectedIds } = get();
+    if (selectedIds.length === 0) return;
+    wrapSelection(set, get, selectedIds, false);
+  },
+
+  unionSelected: () => {
     const { project, selectedIds } = get();
     if (!project || selectedIds.length === 0) return;
-    const result = createGroup(project.document, project.tree, selectedIds, '');
-    if (!result) return;
 
-    const parent =
-      result.parentId === ''
-        ? project.document.root
-        : findNode(project.document.root, result.parentId);
-    const siblings = parent
-      ? orderedChildren(parent, project.settings).map((child) => child.id)
-      : [];
-    const moved = new Set(result.movedIds);
-    const anchorIndex = siblings.indexOf(result.anchorId);
-    const before = siblings
-      .slice(0, Math.max(anchorIndex, 0))
-      .filter((id) => !moved.has(id)).length;
-    const order = siblings.filter((id) => !moved.has(id));
-    order.splice(Math.min(before, order.length), 0, result.groupId);
+    // One node: union it in place. A group of shapes becomes one body; a lone shape already is one.
+    if (selectedIds.length === 1) {
+      const node = findNode(project.document.root, selectedIds[0]);
+      if (!node || node.kind === 'shape') return;
+      const tree = markUnions(project.tree, [node.id]);
+      if (!tree) return;
+      pushHistory(set, get, 'union');
+      set({ project: { ...project, tree, document: applyTreeEdit(get().baseDocument, tree) } });
+      scheduleRebuild(set, get, 0);
+      return;
+    }
+    wrapSelection(set, get, selectedIds, true);
+  },
 
-    const parentKey = orderKeyFor(project.document, result.parentId);
-    pushHistory(set, get, 'group');
-    set({
-      project: {
-        ...project,
-        tree: result.edit,
-        document: applyTreeEdit(get().baseDocument, result.edit),
-        settings: {
-          ...project.settings,
-          [parentKey]: { ...(project.settings[parentKey] ?? {}), childOrder: order },
-        },
-      },
-      selectedIds: [result.groupId],
-    });
+  ununionSelected: () => {
+    const { project, selectedIds } = get();
+    if (!project || selectedIds.length === 0) return;
+    const tree = clearUnions(project.tree, selectedIds);
+    if (!tree) return;
+    pushHistory(set, get, 'ununion');
+    set({ project: { ...project, tree, document: applyTreeEdit(get().baseDocument, tree) } });
     scheduleRebuild(set, get, 0);
   },
 
@@ -435,13 +441,13 @@ export const useProjectStore = create<AppState>()((set, get) => ({
   },
 
   paletteUsage: () => {
-    return paletteUsage(get().leaves);
+    return paletteUsage(withAllContours(get().leaves));
   },
 
   limitPalette: (count) => {
     const { project } = get();
     if (!project) return 0;
-    const usage = paletteUsage(get().leaves);
+    const usage = paletteUsage(withAllContours(get().leaves));
     const { mapping, palette } = reducePalette(usage, count);
     const patches: Record<string, NodeSettings> = {};
     for (const leaf of get().leaves) {
@@ -620,6 +626,54 @@ function mergePatches(
     settings[nodeId] = next;
   }
   return settings;
+}
+
+/** Name of a group created by «Объединить». */
+const UNION_NAME = 'Объединение';
+
+/**
+ * Wraps the selection in a new group and puts it where the least nested, highest selected element
+ * was (`createGroup` explains the rule). A union group is also marked in the overlay (ADR-0028).
+ */
+function wrapSelection(set: SetState, get: GetState, ids: string[], union: boolean): void {
+  const { project } = get();
+  if (!project || ids.length === 0) return;
+
+  const result = createGroup(project.document, project.tree, ids, union ? UNION_NAME : '');
+  if (!result) return;
+
+  const parent =
+    result.parentId === ''
+      ? project.document.root
+      : findNode(project.document.root, result.parentId);
+  const siblings = parent ? orderedChildren(parent, project.settings).map((child) => child.id) : [];
+  const moved = new Set(result.movedIds);
+  const anchorIndex = siblings.indexOf(result.anchorId);
+  const before = siblings.slice(0, Math.max(anchorIndex, 0)).filter((id) => !moved.has(id)).length;
+  const order = siblings.filter((id) => !moved.has(id));
+  order.splice(Math.min(before, order.length), 0, result.groupId);
+
+  const parentKey = orderKeyFor(project.document, result.parentId);
+  const tree = union ? (markUnions(result.edit, [result.groupId]) ?? result.edit) : result.edit;
+  pushHistory(set, get, union ? 'union' : 'group');
+  set({
+    project: {
+      ...project,
+      tree,
+      document: applyTreeEdit(get().baseDocument, tree),
+      settings: {
+        ...project.settings,
+        [parentKey]: { ...(project.settings[parentKey] ?? {}), childOrder: order },
+      },
+    },
+    selectedIds: [result.groupId],
+  });
+  scheduleRebuild(set, get, 0);
+}
+
+/** Leaves with every contour set of a union object, so the palette weights the whole body. */
+function withAllContours(leaves: ResolvedLeaf[]): Array<{ color: string; contours: Contour[] }> {
+  return leaves.map((leaf) => ({ color: leaf.color, contours: leafContours(leaf) }));
 }
 
 function pushHistory(set: SetState, get: GetState, key: string): void {

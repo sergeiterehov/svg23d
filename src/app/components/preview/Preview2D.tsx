@@ -23,6 +23,27 @@ function collectSubtreeIds(node: SvgDocNode, out: Set<string> = new Set()): Set<
   return out;
 }
 
+function collectShapeNodes(node: SvgDocNode, out: SvgDocNode[] = []): SvgDocNode[] {
+  if (node.kind === 'shape') out.push(node);
+  for (const child of node.children) collectShapeNodes(child, out);
+  return out;
+}
+
+/**
+ * Shape id → the union object it belongs to (ADR-0028). A union is painted through its owner: one
+ * colour, one height and one click target, exactly like the single solid the solver builds.
+ */
+function unionOwners(
+  node: SvgDocNode,
+  out: Map<string, SvgDocNode> = new Map(),
+): Map<string, SvgDocNode> {
+  if (node.union) {
+    for (const shape of collectShapeNodes(node)) if (!out.has(shape.id)) out.set(shape.id, node);
+  }
+  for (const child of node.children) unionOwners(child, out);
+  return out;
+}
+
 /**
  * 2D preview rendered from the *computed* contours, not from the original markup, with SVG masks
  * taken from the same include/exclude coverage the solver uses — so the preview matches the 3D result.
@@ -57,6 +78,9 @@ export function Preview2D() {
     if (node) for (const child of collectSubtreeIds(node)) hoveredShapes.add(child);
   }
 
+  const owners = unionOwners(root);
+  const ownerOf = (node: SvgDocNode): SvgDocNode => owners.get(node.id) ?? node;
+
   const unit = Math.max(width, height);
   const strokeNormal = unit / 900;
   const strokeActive = unit / 260;
@@ -68,34 +92,45 @@ export function Preview2D() {
   const maxHeight = heights.length > 0 ? Math.max(...heights) : 1;
   const heightSpan = Math.max(maxHeight - minHeight, 1e-6);
 
+  // The colour the solver gave the element (a union object gets the colour of its whole body).
+  const colorById = new Map(leaves.map((leaf) => [leaf.id, leaf.color]));
+
   const fillFor = (node: SvgDocNode): string => {
+    const owner = ownerOf(node);
+    if (mode === 'heightmap') {
+      const top = heightById.get(owner.id);
+      if (top === undefined) return '#94a3b8';
+      // A model where every element has the same height is "all max".
+      return heightColor(heightSpan < 1e-6 ? 1 : (top - minHeight) / heightSpan);
+    }
     // A per-element colour override (the palette tool, the colour field) wins over the SVG fill.
-    const override = project.settings[node.id]?.colorOverride;
-    const base = override ?? node.fill;
-    if (mode !== 'heightmap') return base === 'none' ? '#000000' : base;
-    const top = heightById.get(node.id);
-    if (top === undefined) return '#94a3b8';
-    // A model where every element has the same height is "all max".
-    return heightColor(heightSpan < 1e-6 ? 1 : (top - minHeight) / heightSpan);
+    const override = project.settings[owner.id]?.colorOverride;
+    const base = colorById.get(owner.id) ?? override ?? owner.fill;
+    return base === 'none' ? '#000000' : base;
   };
 
   const maskId = (index: number): string => `svg23d-mask-${index}`;
   const indexed = shapes.map((node, index) => ({ node, index }));
 
   /** Hidden either in the SVG itself or through the inherited "Скрыть" flag. */
-  const hiddenOf = (node: SvgDocNode): boolean =>
-    node.hidden ||
-    (effectiveSettingsFor(project.document.root, project.settings, project.global, node.id)
-      ?.hidden ??
-      false);
+  const hiddenOf = (node: SvgDocNode): boolean => {
+    const owner = ownerOf(node);
+    return (
+      owner.hidden ||
+      (effectiveSettingsFor(project.document.root, project.settings, project.global, owner.id)
+        ?.hidden ??
+        false)
+    );
+  };
 
   /** Top face of an element: taken from the solved leaves, otherwise from the inherited settings. */
   const topOf = (node: SvgDocNode): number => {
-    const solved = heightById.get(node.id);
+    const owner = ownerOf(node);
+    const solved = heightById.get(owner.id);
     if (solved !== undefined) return solved;
     return (
-      effectiveSettingsFor(project.document.root, project.settings, project.global, node.id)?.zTo ??
-      0
+      effectiveSettingsFor(project.document.root, project.settings, project.global, owner.id)
+        ?.zTo ?? 0
     );
   };
 
@@ -177,8 +212,8 @@ export function Preview2D() {
               strokeWidth={selected || hovered ? strokeActive : strokeNormal}
               strokeLinejoin="round"
               className="cursor-pointer transition-opacity"
-              onMouseEnter={() => hover(node.id)}
-              onClick={() => select(node.id)}
+              onMouseEnter={() => hover(ownerOf(node).id)}
+              onClick={() => select(ownerOf(node).id)}
             />
           );
         })}

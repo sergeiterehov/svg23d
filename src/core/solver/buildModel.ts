@@ -3,17 +3,19 @@ import type {
   BBox3,
   BuildStats,
   DocumentWarning,
+  LeafSource,
   LeafStats,
   PartMesh,
   ResolvedLeaf,
 } from '../model/types';
 import { emptyBBox3 } from '../model/types';
-import { bboxOfContours, bboxIntersects, isEmptyBBox, padBBox } from '../model/defaults';
+import { bboxOfContours, bboxIntersects, isEmptyBBox, leafContours, padBBox } from '../model/defaults';
 import { buildPrism } from '../geometry/extrude';
 import { meshFromSolid } from '../geometry/mesh';
 import {
   offsetSection,
   sectionFromContours,
+  unionSections,
   unionSolids,
   type ManifoldApi,
   type Section,
@@ -58,12 +60,10 @@ export function buildModel({ api, leaves }: BuildOptions): BuildOutput {
     // Zero (or negative) thickness is allowed by the UI: such an element simply is not printed.
     if (!(leaf.zTo - leaf.zFrom > 1e-6)) continue;
 
-    const rawSection = sectionFromContours(api, leaf.contours, leaf.fillRule);
-    const section = applyMask(api, rawSection, leaf.mask);
-    if (rawSection !== section) rawSection.delete();
+    const section = leafSection(api, leaf);
 
-    if (section.isEmpty()) {
-      section.delete();
+    if (!section || section.isEmpty()) {
+      section?.delete();
       warnings.push({
         nodeId: leaf.id,
         code: 'empty-shape',
@@ -71,7 +71,7 @@ export function buildModel({ api, leaves }: BuildOptions): BuildOutput {
       });
       continue;
     }
-    entries.push({ leaf, section, bbox: bboxOfContours(leaf.contours) });
+    entries.push({ leaf, section, bbox: bboxOfContours(leafContours(leaf)) });
   }
 
   const ghostCache = new Map<string, Solid | null>();
@@ -243,6 +243,27 @@ export function buildModel({ api, leaves }: BuildOptions): BuildOutput {
 /** Exported for tests: true when two leaves overlap in Z. */
 export function zOverlaps(a: ResolvedLeaf, b: ResolvedLeaf): boolean {
   return a.zFrom < b.zTo && b.zFrom < a.zTo;
+}
+
+/**
+ * The 2D body of a leaf: one section per contour set, unioned together. A plain element has a single
+ * set; a union object (ADR-0028) has several, and this is where they become one body — before any
+ * extrusion, so the printed part has no internal walls and no sockets between its pieces.
+ */
+function leafSection(api: ManifoldApi, leaf: ResolvedLeaf): Section | null {
+  const sources: LeafSource[] = [
+    { contours: leaf.contours, fillRule: leaf.fillRule, ...(leaf.mask ? { mask: leaf.mask } : {}) },
+    ...(leaf.unionSources ?? []),
+  ];
+  const sections: Section[] = [];
+  for (const source of sources) {
+    const raw = sectionFromContours(api, source.contours, source.fillRule);
+    const masked = applyMask(api, raw, source.mask);
+    if (masked !== raw) raw.delete();
+    if (masked.isEmpty()) masked.delete();
+    else sections.push(masked);
+  }
+  return unionSections(sections);
 }
 
 /**

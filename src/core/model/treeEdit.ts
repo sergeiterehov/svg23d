@@ -21,6 +21,8 @@ export interface TreeEdit {
   groups: string[];
   /** Removed nodes; a whole subtree disappears with its root. */
   removed: string[];
+  /** Nodes that are printed as one object: a 2D union of everything inside (ADR-0028). */
+  unions: string[];
 }
 
 export const EMPTY_TREE_EDIT: TreeEdit = {
@@ -28,6 +30,7 @@ export const EMPTY_TREE_EDIT: TreeEdit = {
   parents: {},
   groups: [],
   removed: [],
+  unions: [],
 };
 
 const ROOT = '';
@@ -105,10 +108,13 @@ export function applyTreeEdit(document: SvgDocument, edit: TreeEdit): SvgDocumen
   };
   prune(root);
 
+  const unions = new Set(edit.unions);
   const finish = (node: SvgDocNode, depth: number): void => {
     node.depth = depth;
     const name = edit.names[node.id];
     if (name) node.name = name;
+    // Unions made by the parser already carry the flag through the clone; user-made ones live here.
+    if (unions.has(node.id)) node.union = true;
     for (const child of node.children) finish(child, depth + 1);
   };
   finish(root, -1);
@@ -237,6 +243,7 @@ export function createGroup(
     parents: { ...edit.parents },
     groups: [...edit.groups, groupId],
     removed: [...edit.removed],
+    unions: [...edit.unions],
   };
   next.parents[groupId] = parentId;
   for (const id of movedIds) next.parents[id] = groupId;
@@ -319,5 +326,26 @@ export function removeFromTree(edit: TreeEdit, ids: string[]): TreeEdit | null {
   if (!changed) return null;
   const parents = { ...edit.parents };
   for (const id of ids) delete parents[id];
-  return { ...edit, parents, removed: [...removed] };
+  // A removed union must not leave a dangling id behind (the flag is re-applied from this list).
+  const unions = edit.unions.filter((id) => !removed.has(id));
+  return { ...edit, parents, removed: [...removed], unions };
+}
+
+/** Marks nodes as union objects: printed as one body, children's settings ignored (ADR-0028). */
+export function markUnions(edit: TreeEdit, ids: string[]): TreeEdit | null {
+  const unions = new Set(edit.unions);
+  let changed = false;
+  for (const id of ids) {
+    if (unions.has(id)) continue;
+    unions.add(id);
+    changed = true;
+  }
+  return changed ? { ...edit, unions: [...unions] } : null;
+}
+
+/** Turns a user-made union back into a plain group (parser-made unions have no overlay entry). */
+export function clearUnions(edit: TreeEdit, ids: string[]): TreeEdit | null {
+  const drop = new Set(ids);
+  const unions = edit.unions.filter((id) => !drop.has(id));
+  return unions.length === edit.unions.length ? null : { ...edit, unions };
 }

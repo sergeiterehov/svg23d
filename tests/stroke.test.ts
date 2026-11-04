@@ -50,7 +50,7 @@ const closedSquare: FlatSubpath = {
 describe('stroke outlines', () => {
   it('strokes a closed square as a band of the requested width', () => {
     // Outer 12×12 minus inner 8×8, with rounded outer corners.
-    const expected = (144 - 4 * (1 - Math.PI / 4)) - 64;
+    const expected = 144 - 4 * (1 - Math.PI / 4) - 64;
     expect(strokeArea([closedSquare], 2, 'butt')).toBeCloseTo(expected, 1);
   });
 
@@ -88,15 +88,22 @@ describe('stroke outlines', () => {
   });
 
   it('ignores zero width', () => {
-    expect(strokeToContours([closedSquare], { width: 0, linecap: 'butt', linejoin: 'miter', tolerance: 0.01 })).toEqual([]);
+    expect(
+      strokeToContours([closedSquare], {
+        width: 0,
+        linecap: 'butt',
+        linejoin: 'miter',
+        tolerance: 0.01,
+      }),
+    ).toEqual([]);
   });
 });
 
-describe('name.svg (text with stroke)', () => {
+describe('name.svg (fill and stroke in one colour)', () => {
   const source = readFileSync(resolve(process.cwd(), 'samples/name.svg'), 'utf8');
   const document = parseSvg(source, { fileName: 'name.svg', global: DEFAULT_GLOBAL_SETTINGS });
 
-  it('emits the stroke as its own element', () => {
+  it('keeps the stroke band as a shape of the document', () => {
     const shapes = collectShapes(document.root);
     const stroke = shapes.find((node) => node.id.endsWith('#stroke'));
     expect(stroke).toBeDefined();
@@ -108,37 +115,71 @@ describe('name.svg (text with stroke)', () => {
 
   it('no longer reports strokes as unsupported', () => {
     expect(
-      document.warnings.some((warning) => warning.message.includes('Обводка (stroke) не преобразуется')),
+      document.warnings.some((warning) =>
+        warning.message.includes('Обводка (stroke) не преобразуется'),
+      ),
     ).toBe(false);
   });
 
-  it('applies the mask that hides the stroke behind the glyphs', () => {
-    const shapes = collectShapes(document.root);
-    const stroke = shapes.find((node) => node.id.endsWith('#stroke'));
-    expect(stroke?.maskInclude?.length).toBeGreaterThan(0);
-    expect(stroke?.maskExclude?.length).toBeGreaterThan(0);
-    expect(document.warnings.some((warning) => warning.message.toLowerCase().includes('маска'))).toBe(
-      false,
-    );
+  it('merges a fill and a stroke of the same colour into one union object', () => {
+    const object = document.root.children.find((node) => node.id === 'pi_stroke');
+    expect(object?.union).toBe(true);
+    expect(object?.children.map((child) => child.id).sort()).toEqual([
+      'pi_stroke#fill',
+      'pi_stroke#stroke',
+    ]);
+
+    const resolved = resolveLeaves({ document, settings: {}, global: DEFAULT_GLOBAL_SETTINGS });
+    const leaf = resolved.leaves.find((item) => item.id === 'pi_stroke');
+    expect(leaf).toBeDefined();
+    // The fill is the primary contour set, the stroke band is merged into it on the 2D level.
+    expect(leaf?.unionSources).toHaveLength(1);
+    expect(resolved.leaves.some((item) => item.id.endsWith('#stroke'))).toBe(false);
   });
 
-  it('builds a model where the stroke is a real 3D element', () => {
-    const resolved = resolveLeaves({
-      document,
-      settings: {},
-      global: DEFAULT_GLOBAL_SETTINGS,
-    });
-    expect(resolved.leaves.some((leaf) => leaf.id.endsWith('#stroke'))).toBe(true);
-
+  it('builds the union as one body and the other colours as their own parts', () => {
+    const resolved = resolveLeaves({ document, settings: {}, global: DEFAULT_GLOBAL_SETTINGS });
     const built = buildModel({ api, leaves: resolved.leaves });
-    expect(built.parts.length).toBeGreaterThan(0);
     expect(built.stats.volume).toBeGreaterThan(0);
 
-    // The mask removes the part of the stroke that lies on top of the glyphs.
+    // The union body is thicker than the fill alone: the stroke band is part of it.
+    const fillOnly = resolveLeaves({
+      document,
+      settings: { 'pi_stroke#stroke': { hidden: true } },
+      global: DEFAULT_GLOBAL_SETTINGS,
+    });
+    expect(buildModel({ api, leaves: fillOnly.leaves }).stats.volume).toBeLessThan(
+      built.stats.volume,
+    );
+  });
+});
+
+describe('masks', () => {
+  // A red square whose right half is excluded by a mask: the same coverage the solver subtracts.
+  const source = `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100">
+    <mask id="half"><rect x="0" y="0" width="50" height="100" fill="#fff"/></mask>
+    <rect id="plate" x="0" y="0" width="100" height="100" fill="#ff0000" mask="url(#half)"/>
+  </svg>`;
+
+  it('resolves mask coverage into include/exclude sets', () => {
+    const document = parseSvg(source, { fileName: 'mask.svg', global: DEFAULT_GLOBAL_SETTINGS });
+    const shape = collectShapes(document.root).find((node) => node.id === 'plate');
+    expect(shape?.maskInclude?.length).toBeGreaterThan(0);
+
+    const resolved = resolveLeaves({ document, settings: {}, global: DEFAULT_GLOBAL_SETTINGS });
+    const leaf = resolved.leaves.find((item) => item.id === 'plate');
+    expect(leaf?.mask?.include.length).toBeGreaterThan(0);
+  });
+
+  it('removes the masked-out area from the model', () => {
+    const document = parseSvg(source, { fileName: 'mask.svg', global: DEFAULT_GLOBAL_SETTINGS });
+    const resolved = resolveLeaves({ document, settings: {}, global: DEFAULT_GLOBAL_SETTINGS });
+    const built = buildModel({ api, leaves: resolved.leaves });
     const withoutMask = buildModel({
       api,
       leaves: resolved.leaves.map((leaf) => ({ ...leaf, mask: undefined })),
     });
-    expect(built.stats.volume).toBeLessThan(withoutMask.stats.volume);
+    expect(built.stats.volume).toBeGreaterThan(0);
+    expect(withoutMask.stats.volume).toBeCloseTo(built.stats.volume * 2, 0);
   });
 });

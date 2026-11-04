@@ -1,6 +1,6 @@
 import { findNode, type PartInfo } from '@core/solver/resolveLeaves';
 import { effectiveSettingsFor } from '@core/solver/inheritance';
-import { collectSubtreeIds } from '@core/solver/selection';
+import { collectSubtreeIds, findUnionOwner } from '@core/solver/selection';
 import type { BBox3, LeafStats, NodeSettings, ResolvedLeaf, SvgDocNode } from '@core/model/types';
 import { useProjectStore, type BuildResultState } from '../../store/useProjectStore';
 import {
@@ -105,8 +105,11 @@ function BackToProject() {
 function ElementPanel({ node }: { node: SvgDocNode }) {
   const project = useProjectStore((s) => s.project);
   const updateSettings = useProjectStore((s) => s.updateSettings);
+  const select = useProjectStore((s) => s.select);
 
   if (!project) return null;
+  /** The union this node is a part of: the settings below would not reach the model. */
+  const unionParent = findUnionOwner(project.document.root, node.id);
 
   const effective = effectiveSettingsFor(
     project.document.root,
@@ -125,140 +128,217 @@ function ElementPanel({ node }: { node: SvgDocNode }) {
           <div className="min-w-0">
             <div className="truncate text-sm font-medium text-slate-100">{node.name}</div>
             <div className="truncate text-[10px] text-slate-500">
-              {node.tag} · {node.id} · {node.kind === 'group' ? 'группа' : 'фигура'}
+              {node.tag} · {node.id} ·{' '}
+              {node.union
+                ? 'объединение'
+                : unionParent
+                  ? 'часть объединения'
+                  : node.kind === 'group'
+                    ? 'группа'
+                    : 'фигура'}
             </div>
           </div>
         </div>
-      </Section>
-
-      <Section
-        title="Высота"
-        hint="Нижняя и верхняя граница выдавливания. «До» не может быть ниже «от»."
-      >
-        <Pair>
-          <NumberField
-            label="Высота от"
-            icon={HeightFromIcon}
-            value={own.zFrom}
-            placeholder={String(round(effective.zFrom))}
-            showReset={own.zFrom !== undefined}
-            step={0.2}
-            max={round(effective.zTo - MIN_HEIGHT_MM)}
-            onCommit={(value) => updateSettings(node.id, { zFrom: value })}
-            onDelta={(delta) => updateSettings(node.id, { zFrom: round(effective.zFrom + delta) })}
-          />
-          <NumberField
-            label="Высота до"
-            icon={HeightToIcon}
-            value={own.zTo}
-            placeholder={String(round(effective.zTo))}
-            showReset={own.zTo !== undefined}
-            step={0.2}
-            min={round(effective.zFrom + MIN_HEIGHT_MM)}
-            onCommit={(value) => updateSettings(node.id, { zTo: value })}
-            onDelta={(delta) => updateSettings(node.id, { zTo: round(effective.zTo + delta) })}
-          />
-        </Pair>
-        {effective.zTo < effective.zFrom && (
-          <p className="text-[11px] text-rose-400">
-            «До» меньше «от» — элемент не будет напечатан.
+        {node.union && (
+          <p className="text-[10px] leading-snug text-slate-500">
+            Объединение: фигуры внутри слиты в одну деталь на 2D-уровне, их личные настройки не
+            учитываются — высоты, фаска и допуск действуют на всё тело. Содержимое можно менять:
+            перетаскивать, удалять и добавлять части.
+          </p>
+        )}
+        {unionParent && (
+          <p className="text-[10px] leading-snug text-amber-400/90">
+            Часть объединения «{unionParent.name}»: печатается одним телом, личные настройки части
+            не действуют.{' '}
+            <button
+              type="button"
+              onClick={() => select(unionParent.id)}
+              className="text-sky-400 transition hover:text-sky-300"
+            >
+              Выбрать объединение
+            </button>
           </p>
         )}
       </Section>
 
-      <Section
-        title="Фаска"
-        hint="Снятие под 45° на верхней и нижней грани; не больше половины высоты элемента."
-      >
-        <Pair>
-          <NumberField
-            label="Фаска сверху"
-            icon={ChamferTopIcon}
-            value={own.chamferTop}
-            placeholder={String(round(effective.chamferTop))}
-            showReset={own.chamferTop !== undefined}
-            step={0.1}
-            min={0}
-            max={maxChamfer(effective.zTo - effective.zFrom, effective.chamferBottom)}
-            onCommit={(value) => updateSettings(node.id, { chamferTop: value })}
-            onDelta={(delta) =>
-              updateSettings(node.id, {
-                chamferTop: Math.max(0, round(effective.chamferTop + delta)),
-              })
-            }
-          />
-          <NumberField
-            label="Фаска снизу"
-            icon={ChamferBottomIcon}
-            value={own.chamferBottom}
-            placeholder={String(round(effective.chamferBottom))}
-            showReset={own.chamferBottom !== undefined}
-            step={0.1}
-            min={0}
-            max={maxChamfer(effective.zTo - effective.zFrom, effective.chamferTop)}
-            onCommit={(value) => updateSettings(node.id, { chamferBottom: value })}
-            onDelta={(delta) =>
-              updateSettings(node.id, {
-                chamferBottom: Math.max(0, round(effective.chamferBottom + delta)),
-              })
-            }
-          />
-        </Pair>
-      </Section>
+      {unionParent && <UnionPartSections node={node} unionParent={unionParent} />}
 
-      <Section
-        title="Гнёзда"
-        hint="Зазор на сторону: отверстие под этот элемент будет больше на 2× значения. Гнездо вырезается в деталях, которые лежат ниже."
-      >
-        <NumberField
-          label="Допуск"
-          icon={ClearanceIcon}
-          value={own.clearance}
-          placeholder={String(round(effective.clearance))}
-          showReset={own.clearance !== undefined}
-          step={0.05}
-          min={0}
-          max={MAX_CLEARANCE_MM}
-          onCommit={(value) => updateSettings(node.id, { clearance: value })}
-          onDelta={(delta) =>
-            updateSettings(node.id, { clearance: Math.max(0, round(effective.clearance + delta)) })
-          }
-        />
-        <Toggle
-          label="Отдельная деталь"
-          checked={own.isPart === true}
-          onChange={(checked) => updateSettings(node.id, { isPart: checked ? true : undefined })}
-          hint="Верхние элементы будут вырезать гнёзда в этой детали"
-        />
-      </Section>
+      {!unionParent && (
+        <>
+          <Section
+            title="Высота"
+            hint="Нижняя и верхняя граница выдавливания. «До» не может быть ниже «от»."
+          >
+            <Pair>
+              <NumberField
+                label="Высота от"
+                icon={HeightFromIcon}
+                value={own.zFrom}
+                placeholder={String(round(effective.zFrom))}
+                showReset={own.zFrom !== undefined}
+                step={0.2}
+                max={round(effective.zTo - MIN_HEIGHT_MM)}
+                onCommit={(value) => updateSettings(node.id, { zFrom: value })}
+                onDelta={(delta) =>
+                  updateSettings(node.id, { zFrom: round(effective.zFrom + delta) })
+                }
+              />
+              <NumberField
+                label="Высота до"
+                icon={HeightToIcon}
+                value={own.zTo}
+                placeholder={String(round(effective.zTo))}
+                showReset={own.zTo !== undefined}
+                step={0.2}
+                min={round(effective.zFrom + MIN_HEIGHT_MM)}
+                onCommit={(value) => updateSettings(node.id, { zTo: value })}
+                onDelta={(delta) => updateSettings(node.id, { zTo: round(effective.zTo + delta) })}
+              />
+            </Pair>
+            {effective.zTo < effective.zFrom && (
+              <p className="text-[11px] text-rose-400">
+                «До» меньше «от» — элемент не будет напечатан.
+              </p>
+            )}
+          </Section>
 
-      <Section title="Вид">
-        <ColorField
-          value={own.colorOverride ?? (node.fill === 'none' ? '#cccccc' : node.fill)}
-          // A group has no colour of its own: its children bring their own, so "none" is the default.
-          empty={node.kind === 'group' && own.colorOverride === undefined ? 'нет' : undefined}
-          mixed={false}
-          onPick={(value) => updateSettings(node.id, { colorOverride: value })}
-          onReset={
-            own.colorOverride !== undefined
-              ? () => updateSettings(node.id, { colorOverride: undefined })
-              : null
-          }
-        />
-        <Toggle
-          label="Скрыть"
-          checked={effective.hidden}
-          // A group hides its whole subtree; a child cannot undo that on its own.
-          disabled={effective.hidden && own.hidden !== true}
-          hint={
-            effective.hidden && own.hidden !== true
-              ? 'Элемент скрыт вместе с группой — снимите «Скрыть» у группы'
-              : undefined
-          }
-          onChange={(checked) => updateSettings(node.id, { hidden: checked ? true : undefined })}
-        />
-      </Section>
+          <Section
+            title="Фаска"
+            hint="Снятие под 45° на верхней и нижней грани; не больше половины высоты элемента."
+          >
+            <Pair>
+              <NumberField
+                label="Фаска сверху"
+                icon={ChamferTopIcon}
+                value={own.chamferTop}
+                placeholder={String(round(effective.chamferTop))}
+                showReset={own.chamferTop !== undefined}
+                step={0.1}
+                min={0}
+                max={maxChamfer(effective.zTo - effective.zFrom, effective.chamferBottom)}
+                onCommit={(value) => updateSettings(node.id, { chamferTop: value })}
+                onDelta={(delta) =>
+                  updateSettings(node.id, {
+                    chamferTop: Math.max(0, round(effective.chamferTop + delta)),
+                  })
+                }
+              />
+              <NumberField
+                label="Фаска снизу"
+                icon={ChamferBottomIcon}
+                value={own.chamferBottom}
+                placeholder={String(round(effective.chamferBottom))}
+                showReset={own.chamferBottom !== undefined}
+                step={0.1}
+                min={0}
+                max={maxChamfer(effective.zTo - effective.zFrom, effective.chamferTop)}
+                onCommit={(value) => updateSettings(node.id, { chamferBottom: value })}
+                onDelta={(delta) =>
+                  updateSettings(node.id, {
+                    chamferBottom: Math.max(0, round(effective.chamferBottom + delta)),
+                  })
+                }
+              />
+            </Pair>
+          </Section>
+
+          <Section
+            title="Гнёзда"
+            hint="Зазор на сторону: отверстие под этот элемент будет больше на 2× значения. Гнездо вырезается в деталях, которые лежат ниже."
+          >
+            <NumberField
+              label="Допуск"
+              icon={ClearanceIcon}
+              value={own.clearance}
+              placeholder={String(round(effective.clearance))}
+              showReset={own.clearance !== undefined}
+              step={0.05}
+              min={0}
+              max={MAX_CLEARANCE_MM}
+              onCommit={(value) => updateSettings(node.id, { clearance: value })}
+              onDelta={(delta) =>
+                updateSettings(node.id, {
+                  clearance: Math.max(0, round(effective.clearance + delta)),
+                })
+              }
+            />
+            <Toggle
+              label="Отдельная деталь"
+              checked={own.isPart === true}
+              onChange={(checked) =>
+                updateSettings(node.id, { isPart: checked ? true : undefined })
+              }
+              hint="Верхние элементы будут вырезать гнёзда в этой детали"
+            />
+          </Section>
+
+          <Section title="Вид">
+            <ColorField
+              value={own.colorOverride ?? (node.union ? unionFill(node) : colourOf(node))}
+              // A group has no colour of its own: its children bring their own, so "none" is the default.
+              empty={
+                node.kind === 'group' && !node.union && own.colorOverride === undefined
+                  ? 'нет'
+                  : undefined
+              }
+              mixed={false}
+              onPick={(value) => updateSettings(node.id, { colorOverride: value })}
+              onReset={
+                own.colorOverride !== undefined
+                  ? () => updateSettings(node.id, { colorOverride: undefined })
+                  : null
+              }
+            />
+            <Toggle
+              label="Скрыть"
+              checked={effective.hidden}
+              // A group hides its whole subtree; a child cannot undo that on its own.
+              disabled={effective.hidden && own.hidden !== true}
+              hint={
+                effective.hidden && own.hidden !== true
+                  ? 'Элемент скрыт вместе с группой — снимите «Скрыть» у группы'
+                  : undefined
+              }
+              onChange={(checked) =>
+                updateSettings(node.id, { hidden: checked ? true : undefined })
+              }
+            />
+          </Section>
+        </>
+      )}
     </>
+  );
+}
+
+/**
+ * A part of a union: only the things that make sense for a piece are offered — its visibility
+ * (it is still a shape of the document) and its place in the stack. Geometry comes from the union.
+ */
+function UnionPartSections({ node, unionParent }: { node: SvgDocNode; unionParent: SvgDocNode }) {
+  const project = useProjectStore((s) => s.project);
+  const updateSettings = useProjectStore((s) => s.updateSettings);
+  if (!project) return null;
+  const own = project.settings[node.id] ?? {};
+  const effective = effectiveSettingsFor(
+    project.document.root,
+    project.settings,
+    project.global,
+    node.id,
+  );
+
+  return (
+    <Section
+      title={`Часть объединения «${unionParent.name}»`}
+      hint="Высоты, фаска, допуск и цвет задаются у самого объединения: части сливаются в одно тело до выдавливания."
+    >
+      <Toggle
+        label="Скрыть часть"
+        checked={effective?.hidden === true}
+        disabled={effective?.hidden === true && own.hidden !== true}
+        hint="Скрытая часть не входит в объединение — например, чтобы убрать обводку"
+        onChange={(checked) => updateSettings(node.id, { hidden: checked ? true : undefined })}
+      />
+    </Section>
   );
 }
 
@@ -322,6 +402,27 @@ function MultiPanel({ nodes }: { nodes: SvgDocNode[] }) {
   const chamferBottom = numbers('chamferBottom');
   const isPart = flags((node) => settings[node.id]?.isPart === true);
   const hidden = flags((node) => effectiveOf(node)?.hidden === true);
+  const unionParents = nodes.map((node) => findUnionOwner(root, node.id));
+  const namesText = nodes
+    .slice(0, 4)
+    .map((node) => node.name)
+    .join(', ');
+
+  // Every selected node is a part of a union: nothing here can reach the model.
+  if (unionParents.every((parent) => parent !== null)) {
+    return (
+      <Section title={`Выбрано: ${nodes.length}`} right={<BackToProject />}>
+        <p className="truncate text-[11px] text-slate-500">
+          {namesText}
+          {nodes.length > 4 ? ` и ещё ${nodes.length - 4}` : ''}
+        </p>
+        <p className="text-[10px] leading-snug text-amber-400/90">
+          Это части объединений: каждая печатается в составе своего тела, поэтому высоты, фаска и
+          допуск задаются у самого объединения. Скрыть часть по отдельности можно в дереве.
+        </p>
+      </Section>
+    );
+  }
 
   return (
     <>
@@ -331,12 +432,14 @@ function MultiPanel({ nodes }: { nodes: SvgDocNode[] }) {
         right={<BackToProject />}
       >
         <p className="truncate text-[11px] text-slate-500">
-          {nodes
-            .slice(0, 4)
-            .map((node) => node.name)
-            .join(', ')}
+          {namesText}
           {nodes.length > 4 ? ` и ещё ${nodes.length - 4}` : ''}
         </p>
+        {unionParents.some((parent) => parent !== null) && (
+          <p className="text-[10px] leading-snug text-amber-400/90">
+            Части объединений в выборке: их личные настройки не действуют.
+          </p>
+        )}
       </Section>
 
       <Section title="Высота" hint="Применяется ко всем выбранным элементам.">
@@ -663,8 +766,10 @@ function StatsPanel() {
   const leaves = useProjectStore((s) => s.leaves);
   const selectedIds = useProjectStore((s) => s.selectedIds);
 
-  const node =
-    project && selectedIds.length === 1 ? findNode(project.document.root, selectedIds[0]) : null;
+  const root = project?.document.root ?? null;
+  const selected = root && selectedIds.length === 1 ? findNode(root, selectedIds[0]) : null;
+  // A part of a union has no body of its own: the numbers belong to the whole merged object.
+  const node = selected && root ? (findUnionOwner(root, selected.id) ?? selected) : null;
 
   return (
     <section className="px-3 py-2.5">
@@ -794,6 +899,22 @@ function Row({ label, value }: { label: string; value: string }) {
       <dd className="select-text tabular-nums text-slate-200">{value}</dd>
     </div>
   );
+}
+
+function colourOf(node: SvgDocNode): string {
+  return node.fill === 'none' ? '#cccccc' : node.fill;
+}
+
+/** Colour of a union object: its own fill, or the first coloured shape inside (the solver's rule). */
+function unionFill(node: SvgDocNode): string {
+  if (node.fill !== 'none') return node.fill;
+  const stack = [...node.children];
+  while (stack.length > 0) {
+    const next = stack.shift() as SvgDocNode;
+    if (next.kind === 'shape' && next.fill !== 'none') return next.fill;
+    stack.push(...next.children);
+  }
+  return '#cccccc';
 }
 
 function round(value: number): number {

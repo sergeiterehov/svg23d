@@ -397,12 +397,15 @@ function buildShapeNodes(
   const hidden = !style.visible || style.opacity < 0.02;
   const nodes: SvgDocNode[] = [];
 
+  let fillShape: SvgDocNode | null = null;
+  let strokeShape: SvgDocNode | null = null;
+
   if (style.fill !== 'none') {
     const contours = dedupeRings(subpaths.map((subpath) => subpath.points));
     const transformed = applyMatrixToContours(contours, matrix);
     const bbox = bboxOfContours(transformed);
     if (transformed.length > 0 && !isEmptyBBox(bbox)) {
-      nodes.push({
+      fillShape = {
         id: build.id,
         tag,
         kind: 'shape',
@@ -416,7 +419,7 @@ function buildShapeNodes(
         bbox,
         ...(mask ? { maskInclude: mask.include, maskExclude: mask.exclude } : {}),
         warnings: localWarnings,
-      });
+      };
     }
   }
 
@@ -430,7 +433,7 @@ function buildShapeNodes(
     const transformed = applyMatrixToContours(strokeContours, matrix);
     const bbox = bboxOfContours(transformed);
     if (transformed.length > 0 && !isEmptyBBox(bbox)) {
-      nodes.push({
+      strokeShape = {
         id: `${build.id}#stroke`,
         tag,
         kind: 'shape',
@@ -444,8 +447,34 @@ function buildShapeNodes(
         bbox,
         ...(mask ? { maskInclude: mask.include, maskExclude: mask.exclude } : {}),
         warnings: [],
-      });
+      };
     }
+  }
+
+  if (fillShape && strokeShape && style.stroke === style.fill) {
+    // Fill and stroke of the same element in the same colour paint one object: emit them as a single
+    // union node so the solver builds one solid instead of a part sitting in a socket of another
+    // part (ADR-0028). A separate node would also cut a socket into the fill.
+    // The parts are named for the tree: the union row keeps the element's own name.
+    fillShape.id = `${build.id}#fill`;
+    fillShape.name = `${build.name} · заливка`;
+    nodes.push({
+      id: build.id,
+      tag,
+      kind: 'group',
+      name: build.name,
+      fill: style.fill,
+      fillRule: style.fillRule,
+      hidden,
+      depth: build.depth,
+      children: [fillShape, strokeShape],
+      subpaths: [],
+      union: true,
+      warnings: [],
+    });
+  } else {
+    if (fillShape) nodes.push(fillShape);
+    if (strokeShape) nodes.push(strokeShape);
   }
 
   if (nodes.length === 0) {
@@ -463,7 +492,11 @@ function buildShapeNodes(
     }
   }
 
-  for (const node of nodes) context.paintOrder.push(node.id);
+  for (const node of nodes) {
+    // A union node is one painted object; its ids are the shapes inside it.
+    if (node.union) context.paintOrder.push(...node.children.map((child) => child.id));
+    else context.paintOrder.push(node.id);
+  }
   return nodes;
 }
 

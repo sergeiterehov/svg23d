@@ -119,6 +119,15 @@ export function EyeIcon({ className }: IconProps) {
   );
 }
 
+/** Two overlapping shapes merged into one body: a union object (ADR-0028). */
+export function UnionIcon({ className }: IconProps) {
+  return (
+    <Svg className={className}>
+      <path d="M4 4h10v6h6v10H10v-6H4Z" />
+    </Svg>
+  );
+}
+
 /** Folder: stands for a group in the layer tree (groups have no colour of their own). */
 export function FolderIcon({ className }: IconProps) {
   return (

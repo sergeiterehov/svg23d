@@ -3,9 +3,11 @@ import clsx from 'clsx';
 import type { NodeSettings, SvgDocNode } from '@core/model/types';
 import { effectiveSettingsFor } from '@core/solver/inheritance';
 import { orderedChildren } from '@core/solver/order';
+import { findNode } from '@core/solver/resolveLeaves';
+import { findUnionOwner } from '@core/solver/selection';
 import { useProjectStore } from '../../store/useProjectStore';
 import { ColorChip } from '../common/Toggle';
-import { EyeIcon, EyeOffIcon, FolderIcon } from '../common/Icon';
+import { EyeIcon, EyeOffIcon, FolderIcon, UnionIcon } from '../common/Icon';
 import { IconButton } from '../common/IconButton';
 
 /** Where a dragged row lands relative to the row under the pointer. */
@@ -42,9 +44,25 @@ function flattenRows(
 ): string[] {
   for (const child of [...orderedChildren(node, settings)].reverse()) {
     out.push(child.id);
+    // A union expands like any group: its contents stay editable — drag a shape out of it, delete it
+    // or add another one; only the object that reaches the solver is merged (ADR-0028).
     if (!collapsed.has(child.id)) flattenRows(child, settings, collapsed, out);
   }
   return out;
+}
+
+/** Shapes behind the given nodes, de-duplicated: how many objects a union would merge. */
+function countShapes(root: SvgDocNode, ids: string[]): number {
+  const seen = new Set<string>();
+  const collect = (node: SvgDocNode): void => {
+    if (node.kind === 'shape') seen.add(node.id);
+    for (const child of node.children) collect(child);
+  };
+  for (const id of ids) {
+    const node = findNode(root, id);
+    if (node) collect(node);
+  }
+  return seen.size;
 }
 
 export function LayerTree() {
@@ -135,8 +153,11 @@ function TreeContextMenu({
   onRename: () => void;
 }) {
   const groupSelected = useProjectStore((s) => s.groupSelected);
+  const unionSelected = useProjectStore((s) => s.unionSelected);
+  const ununionSelected = useProjectStore((s) => s.ununionSelected);
   const removeSelected = useProjectStore((s) => s.removeSelected);
   const selectedIds = useProjectStore((s) => s.selectedIds);
+  const project = useProjectStore((s) => s.project);
   const ref = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState({ left: x, top: y });
 
@@ -170,6 +191,12 @@ function TreeContextMenu({
   const item =
     'flex w-full items-center justify-between gap-6 px-3 py-1.5 text-left text-xs transition';
   const count = selectedIds.length;
+  // A union needs at least two shapes; a single group of shapes can be merged in place.
+  const shapes = project ? countShapes(project.document.root, selectedIds) : 0;
+  const unionId =
+    selectedIds.length === 1 && project?.tree.unions.includes(selectedIds[0])
+      ? selectedIds[0]
+      : null;
 
   return (
     <div
@@ -197,6 +224,43 @@ function TreeContextMenu({
         <span>Сгруппировать{count > 1 ? ` (${count})` : ''}</span>
         <span className="text-[10px] text-slate-500">⌘G</span>
       </button>
+      <button
+        type="button"
+        role="menuitem"
+        disabled={shapes < 2}
+        title={
+          shapes < 2
+            ? 'Нужно минимум две фигуры'
+            : 'Одна печатная деталь: настройки частей не учитываются'
+        }
+        onClick={() => {
+          unionSelected();
+          onClose();
+        }}
+        className={clsx(
+          item,
+          shapes < 2
+            ? 'cursor-not-allowed text-slate-600'
+            : 'text-slate-200 hover:bg-slate-800 hover:text-white',
+        )}
+      >
+        <span>Объединить</span>
+        <span className="text-[10px] text-slate-500">⌥⇧U</span>
+      </button>
+      {unionId && (
+        <button
+          type="button"
+          role="menuitem"
+          onClick={() => {
+            ununionSelected();
+            onClose();
+          }}
+          className={clsx(item, 'text-slate-200 hover:bg-slate-800 hover:text-white')}
+        >
+          <span>Разъединить</span>
+          <span className="text-[10px] text-slate-500">вернуть части</span>
+        </button>
+      )}
       <button
         type="button"
         role="menuitem"
@@ -259,6 +323,12 @@ function TreeRow({ node, depth, ui, anchorRef, onDrop }: TreeRowProps) {
     project.global,
     node.id,
   );
+  // A part of a union shows the union's heights: its own would not reach the model.
+  const owner = node.union ? null : findUnionOwner(project.document.root, node.id);
+  const range =
+    owner === null
+      ? effective
+      : effectiveSettingsFor(project.document.root, project.settings, project.global, owner.id);
   const isSelected = selectedIds.includes(node.id);
   const isHovered = hoveredId === node.id;
   const isHidden = effective?.hidden === true;
@@ -267,6 +337,8 @@ function TreeRow({ node, depth, ui, anchorRef, onDrop }: TreeRowProps) {
   const hiddenByGroup = isHidden && !ownHidden;
   const isGroup = node.kind === 'group';
   const hasChildren = node.children.length > 0;
+  const unionColor =
+    project.settings[node.id]?.colorOverride ?? (node.fill === 'none' ? undefined : node.fill);
   const isPart = project.settings[node.id]?.isPart === true;
   const expanded = hasChildren && !ui.collapsed.has(node.id);
   const children = [...orderedChildren(node, project.settings)].reverse();
@@ -355,7 +427,7 @@ function TreeRow({ node, depth, ui, anchorRef, onDrop }: TreeRowProps) {
         }}
         onMouseEnter={() => hover(node.id)}
         onMouseLeave={() => hover(null)}
-        title={`${node.tag} · ${node.id}`}
+        title={node.union ? `объединение · ${node.id}` : `${node.tag} · ${node.id}`}
       >
         <button
           type="button"
@@ -368,7 +440,16 @@ function TreeRow({ node, depth, ui, anchorRef, onDrop }: TreeRowProps) {
           {expanded ? '▾' : '▸'}
         </button>
 
-        {isGroup ? (
+        {node.union ? (
+          // Merged body: the icon carries the object's colour, the shape says "not a container".
+          <span
+            className="grid shrink-0 place-items-center text-slate-400"
+            style={unionColor ? { color: unionColor } : undefined}
+            title="Объединение"
+          >
+            <UnionIcon className="h-3.5 w-3.5" />
+          </span>
+        ) : isGroup ? (
           // Groups have no colour of their own: the folder says "this is a container".
           <FolderIcon className="h-3.5 w-3.5 text-slate-400" />
         ) : (
@@ -406,7 +487,7 @@ function TreeRow({ node, depth, ui, anchorRef, onDrop }: TreeRowProps) {
         )}
 
         <span className="ml-auto shrink-0 text-[10px] tabular-nums text-slate-500">
-          {effective ? `${round(effective.zFrom)}–${round(effective.zTo)}` : ''}
+          {range ? `${round(range.zFrom)}–${round(range.zTo)}` : ''}
         </span>
 
         <IconButton

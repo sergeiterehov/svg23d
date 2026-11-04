@@ -45,6 +45,18 @@ export function isEmptyBBox(b: BBox): boolean {
   return !(b.minX <= b.maxX && b.minY <= b.maxY);
 }
 
+/**
+ * Every contour of a leaf, primary set first. A union object carries more than one set (ADR-0028);
+ * bounds, area weights and preview arrows must cover all of them.
+ */
+export function leafContours(leaf: {
+  contours: Contour[];
+  unionSources?: ReadonlyArray<{ contours: Contour[] }>;
+}): Contour[] {
+  if (!leaf.unionSources || leaf.unionSources.length === 0) return leaf.contours;
+  return leaf.contours.concat(...leaf.unionSources.map((source) => source.contours));
+}
+
 export function bboxArea(b: BBox): number {
   if (isEmptyBBox(b)) return 0;
   return (b.maxX - b.minX) * (b.maxY - b.minY);

@@ -1,6 +1,7 @@
 import type {
   DocumentWarning,
   GlobalSettings,
+  LeafSource,
   NodeSettings,
   ResolvedLeaf,
   SvgDocument,
@@ -135,51 +136,94 @@ export function resolveLeaves(input: ResolveInput): ResolveResult {
 
     if (own.enabled === false) return;
 
-    if (node.kind === 'shape') {
-      if (effective.hidden) return;
-      const contours = applyMatrixToContours(node.subpaths, mapping.matrix);
-      if (contours.length === 0) return;
+    const maskOf = (source: SvgDocNode): LeafSource['mask'] =>
+      source.maskInclude && source.maskInclude.length > 0
+        ? {
+            include: applyMatrixToContours(source.maskInclude, mapping.matrix),
+            exclude: applyMatrixToContours(source.maskExclude ?? [], mapping.matrix),
+          }
+        : undefined;
 
+    /** One leaf; `sources` carries the extra contour sets of a union object. */
+    const emitLeaf = (
+      id: string,
+      name: string,
+      primary: LeafSource,
+      color: string,
+      extra: LeafSource[] = [],
+    ): void => {
       if (!(effective.zTo > effective.zFrom)) {
         // A zero-height band is allowed by the UI (the element just is not printed), so this is
         // informational rather than an error.
         warnings.push({
-          nodeId: node.id,
+          nodeId: id,
           code: 'empty-shape',
-          message: `Элемент «${node.name}» не напечатан: «до» (${effective.zTo}) не больше «от» (${effective.zFrom})`,
+          message: `Элемент «${name}» не напечатан: «до» (${effective.zTo}) не больше «от» (${effective.zFrom})`,
         });
         return;
       }
-
-      const color = settingsColor(own.colorOverride, node.fill);
       if (!parts.has(currentPartId)) {
         parts.set(currentPartId, { id: currentPartId, name: currentPartName, color });
       }
-
-      const mask =
-        node.maskInclude && node.maskInclude.length > 0
-          ? {
-              include: applyMatrixToContours(node.maskInclude, mapping.matrix),
-              exclude: applyMatrixToContours(node.maskExclude ?? [], mapping.matrix),
-            }
-          : undefined;
-
       leaves.push({
-        id: node.id,
-        name: node.name,
+        id,
+        name,
         partId: currentPartId,
         partName: currentPartName,
         order: order++,
-        contours,
-        fillRule: node.fillRule,
+        contours: primary.contours,
+        fillRule: primary.fillRule,
+        ...(primary.mask ? { mask: primary.mask } : {}),
+        ...(extra.length > 0 ? { unionSources: extra } : {}),
         color,
         zFrom: effective.zFrom,
         zTo: effective.zTo,
         clearance: Math.max(0, effective.clearance),
         chamferTop: Math.max(0, effective.chamferTop),
         chamferBottom: Math.max(0, effective.chamferBottom),
-        mask,
       });
+    };
+
+    if (node.union === true) {
+      // One object made of everything inside (ADR-0028): the children's own settings are ignored, the
+      // node's inherited ones apply to the whole body. The boolean union happens in the solver, where
+      // the 2D engine is available.
+      if (effective.hidden) return;
+      const sources: LeafSource[] = [];
+      let fill = node.fill;
+      const collect = (current: SvgDocNode): void => {
+        if (current.kind === 'shape') {
+          // Visibility is the one per-part setting that still works: hiding a piece removes it from
+          // the merged body (the tree's eye button and «Скрыть часть» in the inspector rely on it).
+          const partHidden = settings[current.id]?.hidden === true || current.hidden;
+          if (partHidden) return;
+          const contours = applyMatrixToContours(current.subpaths, mapping.matrix);
+          if (contours.length === 0) return;
+          if (fill === 'none' && current.fill !== 'none') fill = current.fill;
+          const mask = maskOf(current);
+          sources.push({ contours, fillRule: current.fillRule, ...(mask ? { mask } : {}) });
+          return;
+        }
+        for (const child of orderedChildren(current, settings)) collect(child);
+      };
+      for (const child of orderedChildren(node, settings)) collect(child);
+      const [primary, ...extra] = sources;
+      if (!primary) return;
+      emitLeaf(node.id, node.name, primary, settingsColor(own.colorOverride, fill), extra);
+      return;
+    }
+
+    if (node.kind === 'shape') {
+      if (effective.hidden) return;
+      const contours = applyMatrixToContours(node.subpaths, mapping.matrix);
+      if (contours.length === 0) return;
+      const mask = maskOf(node);
+      emitLeaf(
+        node.id,
+        node.name,
+        { contours, fillRule: node.fillRule, ...(mask ? { mask } : {}) },
+        settingsColor(own.colorOverride, node.fill),
+      );
       return;
     }
 

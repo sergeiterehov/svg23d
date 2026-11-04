@@ -44,6 +44,12 @@ export interface SvgDocNode {
   /** Mask coverage (user units, transforms applied): visible inside `include`, hidden inside `exclude`. */
   maskInclude?: Contour[];
   maskExclude?: Contour[];
+  /**
+   * The node is one printed object: its shapes are unioned on the 2D level before extrusion and the
+   * settings of the children are ignored (ADR-0028). Set by the «Объединить» tool and by the parser
+   * when a shape is filled and stroked in the same colour.
+   */
+  union?: boolean;
   warnings: string[];
 }
 
@@ -143,6 +149,14 @@ export interface Project {
   global: GlobalSettings;
 }
 
+/** One contour set of an object: a plain element has one, a union object has several. */
+export interface LeafSource {
+  contours: Contour[];
+  fillRule: FillRule;
+  /** Optional mask: the extruded area is intersected with `include` and `exclude` is subtracted. */
+  mask?: { include: Contour[]; exclude: Contour[] };
+}
+
 /** Fully resolved leaf, ready for geometry. All values in mm. */
 export interface ResolvedLeaf {
   id: string;
@@ -151,8 +165,11 @@ export interface ResolvedLeaf {
   partName: string;
   /** Global paint index; larger = higher = cuts into lower leaves. */
   order: number;
+  /** Primary geometry; also the first entry of `unionSources` when the object is a union. */
   contours: Contour[];
   fillRule: FillRule;
+  /** Extra contour sets unioned with the primary one on the 2D level (ADR-0028). */
+  unionSources?: LeafSource[];
   color: string;
   zFrom: number;
   zTo: number;

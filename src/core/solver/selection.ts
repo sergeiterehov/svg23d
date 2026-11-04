@@ -2,6 +2,26 @@ import type { ResolvedLeaf, SvgDocNode } from '../model/types';
 import { findNode } from './resolveLeaves';
 
 /**
+ * Nearest ancestor that is a union object (ADR-0028); the node itself does not count. Settings of a
+ * part of a union do not reach the model, so the UI shows the union's values for it instead.
+ */
+export function findUnionOwner(root: SvgDocNode, nodeId: string): SvgDocNode | null {
+  let found: SvgDocNode | null = null;
+  const walk = (node: SvgDocNode, union: SvgDocNode | null): boolean => {
+    if (node.id === nodeId) {
+      found = union;
+      return true;
+    }
+    for (const child of node.children) {
+      if (walk(child, node.union === true ? node : union)) return true;
+    }
+    return false;
+  };
+  walk(root, null);
+  return found;
+}
+
+/**
  * Maps a tree selection to the printed part that should be highlighted in 3D.
  * A leaf belongs to exactly one part; a group is highlighted when all its leaves share one part.
  */
