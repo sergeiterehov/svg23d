@@ -43,8 +43,6 @@ export function Inspector() {
   );
 }
 
-const HINT_SUFFIX = ' В поле можно ввести дельту: «+2» или «-2» изменит значение на эту величину.';
-
 function ElementPanel({ node }: { node: SvgDocNode }) {
   const project = useProjectStore((s) => s.project);
   const updateSettings = useProjectStore((s) => s.updateSettings);
@@ -94,7 +92,7 @@ function ElementPanel({ node }: { node: SvgDocNode }) {
             placeholder={String(round(effective.zFrom))}
             showReset={own.zFrom !== undefined}
             step={0.2}
-            hint={`Нижняя граница выдавливания.${HINT_SUFFIX}`}
+            hint="Нижняя граница выдавливания."
             onCommit={(value) => updateSettings(node.id, { zFrom: value })}
             onDelta={(delta) =>
               updateSettings(node.id, { zFrom: round(effective.zFrom + delta) })
@@ -106,7 +104,7 @@ function ElementPanel({ node }: { node: SvgDocNode }) {
             placeholder={String(round(effective.zTo))}
             showReset={own.zTo !== undefined}
             step={0.2}
-            hint={`Верхняя граница выдавливания, должна быть больше нижней.${HINT_SUFFIX}`}
+            hint="Верхняя граница выдавливания, должна быть больше нижней."
             onCommit={(value) => updateSettings(node.id, { zTo: value })}
             onDelta={(delta) => updateSettings(node.id, { zTo: round(effective.zTo + delta) })}
           />
@@ -124,7 +122,7 @@ function ElementPanel({ node }: { node: SvgDocNode }) {
           showReset={own.clearance !== undefined}
           step={0.05}
           min={0}
-          hint={`Действует на гнёзда, которые этот элемент вырезает в деталях НИЖЕ. Зазор на сторону: отверстие будет больше на 2× значения.${HINT_SUFFIX}`}
+          hint="Действует на гнёзда, которые этот элемент вырезает в деталях НИЖЕ. Зазор на сторону: отверстие будет больше на 2× значения."
           onCommit={(value) => updateSettings(node.id, { clearance: value })}
           onDelta={(delta) =>
             updateSettings(node.id, { clearance: Math.max(0, round(effective.clearance + delta)) })
@@ -139,7 +137,7 @@ function ElementPanel({ node }: { node: SvgDocNode }) {
             showReset={own.chamferTop !== undefined}
             step={0.1}
             min={0}
-            hint={`Снятие фаски под 45° на верхней грани.${HINT_SUFFIX}`}
+            hint="Снятие фаски под 45° на верхней грани."
             onCommit={(value) => updateSettings(node.id, { chamferTop: value })}
             onDelta={(delta) =>
               updateSettings(node.id, {
@@ -154,7 +152,7 @@ function ElementPanel({ node }: { node: SvgDocNode }) {
             showReset={own.chamferBottom !== undefined}
             step={0.1}
             min={0}
-            hint={`Снятие фаски под 45° на нижней грани.${HINT_SUFFIX}`}
+            hint="Снятие фаски под 45° на нижней грани."
             onCommit={(value) => updateSettings(node.id, { chamferBottom: value })}
             onDelta={(delta) =>
               updateSettings(node.id, {
@@ -260,9 +258,7 @@ function MultiPanel({ nodes }: { nodes: SvgDocNode[] }) {
       <div className="flex items-center justify-between gap-2">
         <h2 className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
           <span>Выбрано: {nodes.length}</span>
-          <HelpHint
-            text={`⌘/Ctrl-клик по дереву добавляет элемент к выбору. Пустое поле с разбросом вроде «12-15» значит разные значения.${HINT_SUFFIX}`}
-          />
+          <HelpHint text="⌘/Ctrl-клик по дереву добавляет элемент к выбору. Пустое поле с разбросом вроде «12-15» значит разные значения." />
         </h2>
         <button
           type="button"
@@ -289,7 +285,7 @@ function MultiPanel({ nodes }: { nodes: SvgDocNode[] }) {
             value={zFrom.value}
             placeholder={zFrom.placeholder}
             step={0.2}
-            hint={`Нижняя граница выдавливания.${HINT_SUFFIX}`}
+            hint="Нижняя граница выдавливания."
             onCommit={zFrom.commit}
             onDelta={(delta) => zFrom.delta(delta)}
           />
@@ -298,7 +294,7 @@ function MultiPanel({ nodes }: { nodes: SvgDocNode[] }) {
             value={zTo.value}
             placeholder={zTo.placeholder}
             step={0.2}
-            hint={`Верхняя граница выдавливания.${HINT_SUFFIX}`}
+            hint="Верхняя граница выдавливания."
             onCommit={zTo.commit}
             onDelta={(delta) => zTo.delta(delta)}
           />
@@ -310,7 +306,7 @@ function MultiPanel({ nodes }: { nodes: SvgDocNode[] }) {
           placeholder={clearance.placeholder}
           step={0.05}
           min={0}
-          hint={`Зазор на сторону в гнёздах этого элемента.${HINT_SUFFIX}`}
+          hint="Зазор на сторону в гнёздах этого элемента."
           onCommit={clearance.commit}
           onDelta={(delta) => clearance.delta(delta, 0)}
         />
@@ -331,7 +327,7 @@ function MultiPanel({ nodes }: { nodes: SvgDocNode[] }) {
             placeholder={chamferTop.placeholder}
             step={0.1}
             min={0}
-            hint={`Снятие фаски под 45° на верхней грани.${HINT_SUFFIX}`}
+            hint="Снятие фаски под 45° на верхней грани."
             onCommit={chamferTop.commit}
             onDelta={(delta) => chamferTop.delta(delta, 0)}
           />
@@ -341,7 +337,7 @@ function MultiPanel({ nodes }: { nodes: SvgDocNode[] }) {
             placeholder={chamferBottom.placeholder}
             step={0.1}
             min={0}
-            hint={`Снятие фаски под 45° на нижней грани.${HINT_SUFFIX}`}
+            hint="Снятие фаски под 45° на нижней грани."
             onCommit={chamferBottom.commit}
             onDelta={(delta) => chamferBottom.delta(delta, 0)}
           />
@@ -452,7 +448,7 @@ function ProjectPanel() {
             placeholder=""
             step={5}
             min={1}
-            hint={`Ширина, высота или бо́льшая сторона модели в мм; пропорции сохраняются.${HINT_SUFFIX}`}
+            hint="Ширина, высота или бо́льшая сторона модели в мм; пропорции сохраняются."
             onCommit={(value) => updateGlobal({ fitSizeMm: value ?? global.fitSizeMm })}
             onDelta={(delta) =>
               updateGlobal({ fitSizeMm: Math.max(1, round(global.fitSizeMm + delta)) })
@@ -479,7 +475,6 @@ function ProjectPanel() {
             value={global.defaultZFrom}
             placeholder=""
             step={0.2}
-            hint={HINT_SUFFIX.trim()}
             onCommit={(value) => updateGlobal({ defaultZFrom: value ?? 0 })}
             onDelta={(delta) => updateGlobal({ defaultZFrom: round(global.defaultZFrom + delta) })}
           />
@@ -488,7 +483,6 @@ function ProjectPanel() {
             value={global.defaultZTo}
             placeholder=""
             step={0.2}
-            hint={HINT_SUFFIX.trim()}
             onCommit={(value) => updateGlobal({ defaultZTo: value ?? 0 })}
             onDelta={(delta) => updateGlobal({ defaultZTo: round(global.defaultZTo + delta) })}
           />
@@ -500,7 +494,6 @@ function ProjectPanel() {
           placeholder=""
           step={0.05}
           min={0}
-          hint={HINT_SUFFIX.trim()}
           onCommit={(value) => updateGlobal({ defaultClearance: value ?? 0 })}
           onDelta={(delta) =>
             updateGlobal({ defaultClearance: Math.max(0, round(global.defaultClearance + delta)) })
@@ -514,7 +507,6 @@ function ProjectPanel() {
             placeholder=""
             step={0.1}
             min={0}
-            hint={HINT_SUFFIX.trim()}
             onCommit={(value) => updateGlobal({ defaultChamferTop: value ?? 0 })}
             onDelta={(delta) =>
               updateGlobal({
@@ -528,7 +520,6 @@ function ProjectPanel() {
             placeholder=""
             step={0.1}
             min={0}
-            hint={HINT_SUFFIX.trim()}
             onCommit={(value) => updateGlobal({ defaultChamferBottom: value ?? 0 })}
             onDelta={(delta) =>
               updateGlobal({
