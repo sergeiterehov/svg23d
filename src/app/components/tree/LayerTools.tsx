@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useProjectStore } from '../../store/useProjectStore';
 import { ToolsIcon } from '../common/Icon';
 import { IconButton } from '../common/IconButton';
-import { LAYER_MM } from '@core/solver/distribute';
+import { LAYER_MM, SINK_MM } from '@core/solver/distribute';
 
 /**
  * Tools menu of the layers panel. It lives in the panel header because its actions operate on the
@@ -66,7 +66,7 @@ export function LayerTools() {
               Разложить по слоям
             </span>
             <span className="mt-0.5 block text-[10px] leading-snug text-slate-500">
-              Ставит деталь на верх нижнего пересечения и на {LAYER_MM} мм выше верхнего
+              Деталь входит на {SINK_MM} мм в нижнюю и выступает на {LAYER_MM} мм над верхней
             </span>
           </button>
         </div>
