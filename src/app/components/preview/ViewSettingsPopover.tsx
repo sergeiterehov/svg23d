@@ -107,6 +107,21 @@ export function ViewSettingsPopover() {
                 onChange={(value) => updateView({ material: value as ViewSettings['material'] })}
               />
             </label>
+
+            <label className="block">
+              <span className="text-xs text-slate-400">Проекция</span>
+              <SelectField
+                className="mt-1"
+                value={view.projection}
+                options={[
+                  { value: 'perspective', label: 'Перспективная' },
+                  { value: 'orthographic', label: 'Ортогональная' },
+                ]}
+                onChange={(value) =>
+                  updateView({ projection: value as ViewSettings['projection'] })
+                }
+              />
+            </label>
           </div>
         </div>
       )}

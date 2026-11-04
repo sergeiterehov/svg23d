@@ -4,22 +4,30 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { OutlinePass } from 'three/addons/postprocessing/OutlinePass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import type { PartMesh, ViewLighting, ViewMaterial } from '@core/model/types';
+import type { PartMesh, ViewLighting, ViewMaterial, ViewProjection } from '@core/model/types';
+import { createNavCube, type NavCubeHandle } from './navCube';
 
 export interface ViewOptions {
   material: ViewMaterial;
   lighting: ViewLighting;
+  projection: ViewProjection;
 }
 
-export const DEFAULT_VIEW: ViewOptions = { material: 'matte', lighting: 'studio' };
+export const DEFAULT_VIEW: ViewOptions = {
+  material: 'matte',
+  lighting: 'studio',
+  projection: 'perspective',
+};
 
 export interface ViewerHandle {
   /** `frame: true` re-frames the camera; by default the current view is preserved. */
   setParts: (parts: PartMesh[], options?: { frame?: boolean }) => void;
   /** Highlights one part with a light-blue outline; `null` clears the selection. */
   setSelectedPart: (partId: string | null) => void;
-  /** Material/lighting presets; does not rebuild geometry. */
+  /** Material/lighting/projection presets; does not rebuild geometry. */
   setView: (view: ViewOptions) => void;
+  /** Mounts the orientation cube; returns a detach function. */
+  mountNavCube: (container: HTMLElement) => () => void;
   resetView: () => void;
   toggleWireframe: () => boolean;
   dispose: () => void;
@@ -48,14 +56,27 @@ export function createViewer(container: HTMLElement, options: ViewerOptions = {}
   const scene = new THREE.Scene();
   scene.background = new THREE.Color('#0b1120');
 
-  const camera = new THREE.PerspectiveCamera(
-    45,
-    (container.clientWidth || 1) / (container.clientHeight || 1),
-    0.1,
-    50000,
-  );
-  camera.up.set(0, 0, 1);
-  camera.position.set(160, -200, 170);
+  const aspectRatio = (): number => (container.clientWidth || 1) / (container.clientHeight || 1);
+
+  const perspective = new THREE.PerspectiveCamera(45, aspectRatio(), 0.1, 50000);
+  perspective.up.set(0, 0, 1);
+  perspective.position.set(160, -200, 170);
+
+  // The orthographic camera exists from the start so switching projections never re-creates
+  // the WebGL context; only the active reference and the composer targets are swapped.
+  const ortho = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 50000);
+  ortho.up.set(0, 0, 1);
+  ortho.position.copy(perspective.position);
+
+  // The active camera is typed structurally: `THREE.Camera` itself does not declare `near`/`far`,
+  // and both concrete cameras satisfy this shape, so the reference can simply be swapped.
+  interface ViewerCamera extends THREE.Camera {
+    near: number;
+    far: number;
+    updateProjectionMatrix: () => void;
+  }
+
+  let camera: ViewerCamera = perspective;
 
   const controls = new OrbitControls(camera, canvas);
   controls.enableDamping = true;
@@ -64,7 +85,8 @@ export function createViewer(container: HTMLElement, options: ViewerOptions = {}
 
   // Screen-space outline for the selected part (crisp at any zoom, unlike an inflated copy).
   const composer = new EffectComposer(renderer);
-  composer.addPass(new RenderPass(scene, camera));
+  const renderPass = new RenderPass(scene, camera);
+  composer.addPass(renderPass);
   const outlinePass = new OutlinePass(
     new THREE.Vector2(container.clientWidth || 1, container.clientHeight || 1),
     scene,
@@ -169,6 +191,100 @@ export function createViewer(container: HTMLElement, options: ViewerOptions = {}
   let currentView: ViewOptions = options.view ?? DEFAULT_VIEW;
   applyLighting(currentView.lighting);
 
+  const viewDistance = (): number =>
+    Math.max(camera.position.distanceTo(controls.target), 1e-6);
+
+  /**
+   * Orthographic framing mirrors the perspective one: the frustum height is what a perspective
+   * camera would show at the current distance, so switching projection keeps the model the same
+   * size on screen.
+   */
+  const syncOrthoFrustum = (distance: number): void => {
+    const halfHeight = distance * Math.tan(THREE.MathUtils.degToRad(perspective.fov) / 2);
+    const aspect = aspectRatio();
+    ortho.top = halfHeight;
+    ortho.bottom = -halfHeight;
+    ortho.left = -halfHeight * aspect;
+    ortho.right = halfHeight * aspect;
+    ortho.updateProjectionMatrix();
+  };
+
+  const setProjection = (next: ViewProjection): void => {
+    if ((next === 'orthographic') === (camera === ortho)) return;
+    const distance = viewDistance();
+    const { near, far } = camera;
+    if (next === 'orthographic') {
+      ortho.position.copy(camera.position);
+      ortho.near = near;
+      ortho.far = far;
+      ortho.zoom = 1;
+      syncOrthoFrustum(distance);
+      camera = ortho;
+    } else {
+      perspective.position.copy(camera.position);
+      perspective.near = near;
+      perspective.far = far;
+      perspective.updateProjectionMatrix();
+      camera = perspective;
+    }
+    controls.object = camera;
+    renderPass.camera = camera;
+    outlinePass.renderCamera = camera;
+    controls.update();
+  };
+
+  /**
+   * Animated jump to a canonical view (driven by the nav cube). Directions are interpolated with
+   * a quaternion so that opposite sides (front → back) never pass through the target.
+   */
+  let viewTransition: {
+    from: THREE.Vector3;
+    rotation: THREE.Quaternion;
+    distance: number;
+    start: number;
+  } | null = null;
+  const identityQuaternion = new THREE.Quaternion();
+  const partialQuaternion = new THREE.Quaternion();
+
+  const orientTo = (direction: THREE.Vector3): void => {
+    const from = camera.position.clone().sub(controls.target).normalize();
+    const to = direction.clone().normalize();
+    if (from.distanceToSquared(to) < 1e-8) return;
+    viewTransition = {
+      from,
+      rotation: new THREE.Quaternion().setFromUnitVectors(from, to),
+      distance: viewDistance(),
+      start: performance.now(),
+    };
+  };
+
+  /** Orbit the camera around the target (used when dragging the nav cube). */
+  const orbitBy = (dx: number, dy: number): void => {
+    const upQuaternion = new THREE.Quaternion().setFromUnitVectors(
+      new THREE.Vector3(0, 0, 1),
+      new THREE.Vector3(0, 1, 0),
+    );
+    const offset = camera.position.clone().sub(controls.target);
+    offset.applyQuaternion(upQuaternion);
+    const spherical = new THREE.Spherical().setFromVector3(offset);
+    const step = 0.02;
+    spherical.theta -= dx * step;
+    spherical.phi = THREE.MathUtils.clamp(spherical.phi - dy * step, 0.02, Math.PI - 0.02);
+    offset.setFromSpherical(spherical).applyQuaternion(upQuaternion.clone().invert());
+    camera.position.copy(controls.target).add(offset);
+    viewTransition = null;
+  };
+
+  const stepTransition = (): void => {
+    if (!viewTransition) return;
+    const t = Math.min((performance.now() - viewTransition.start) / 420, 1);
+    const eased = t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2;
+    partialQuaternion.slerpQuaternions(identityQuaternion, viewTransition.rotation, eased);
+    const direction = viewTransition.from.clone().applyQuaternion(partialQuaternion);
+    camera.position.copy(controls.target).addScaledVector(direction, viewTransition.distance);
+    if (t >= 1) viewTransition = null;
+  };
+
   let grid: THREE.GridHelper | null = null;
   const partsGroup = new THREE.Group();
   scene.add(partsGroup);
@@ -209,7 +325,11 @@ export function createViewer(container: HTMLElement, options: ViewerOptions = {}
     const size = box.getSize(new THREE.Vector3());
     const center = box.getCenter(new THREE.Vector3());
     const radius = Math.max(size.x, size.y, size.z, 1) * 0.5;
-    const distance = radius / Math.tan((camera.fov * Math.PI) / 360) * 1.9;
+    // Fit the tighter of the two field-of-view axes, otherwise a wide model overflows the sides
+    // of a tall, narrow viewport.
+    const halfFovY = THREE.MathUtils.degToRad(perspective.fov) / 2;
+    const halfFovX = Math.atan(Math.tan(halfFovY) * aspectRatio());
+    const distance = (radius / Math.tan(Math.min(halfFovY, halfFovX))) * 1.9;
 
     controls.target.copy(center);
     camera.position.set(
@@ -219,7 +339,9 @@ export function createViewer(container: HTMLElement, options: ViewerOptions = {}
     );
     camera.near = Math.max(distance / 200, 0.01);
     camera.far = distance * 20;
-    camera.updateProjectionMatrix();
+    viewTransition = null;
+    if (camera === ortho) syncOrthoFrustum(distance);
+    else camera.updateProjectionMatrix();
     controls.update();
   };
 
@@ -230,16 +352,25 @@ export function createViewer(container: HTMLElement, options: ViewerOptions = {}
     composer.setSize(width, height);
     canvas.style.width = '100%';
     canvas.style.height = '100%';
-    camera.aspect = width / height;
-    camera.updateProjectionMatrix();
+    if (camera === ortho) {
+      syncOrthoFrustum(viewDistance());
+    } else {
+      perspective.aspect = width / height;
+      perspective.updateProjectionMatrix();
+    }
   };
   const observer = new ResizeObserver(resize);
   observer.observe(container);
   resize();
 
+  let navCube: NavCubeHandle | null = null;
+
   renderer.setAnimationLoop(() => {
+    stepTransition();
     controls.update();
     composer.render();
+    navCube?.sync(camera);
+    navCube?.render();
   });
 
   const applySelection = (): void => {
@@ -301,6 +432,15 @@ export function createViewer(container: HTMLElement, options: ViewerOptions = {}
         material.metalness = params.metalness;
         material.needsUpdate = true;
       }
+      setProjection(view.projection);
+    },
+    mountNavCube(containerElement) {
+      navCube?.dispose();
+      navCube = createNavCube(containerElement, { onPick: orientTo, onDrag: orbitBy });
+      return () => {
+        navCube?.dispose();
+        navCube = null;
+      };
     },
     resetView() {
       frameAll();
@@ -312,6 +452,8 @@ export function createViewer(container: HTMLElement, options: ViewerOptions = {}
     },
     dispose() {
       observer.disconnect();
+      navCube?.dispose();
+      navCube = null;
       canvas.removeEventListener('pointerdown', handlePointerDown);
       canvas.removeEventListener('pointerup', handlePointerUp);
       renderer.setAnimationLoop(null);

@@ -13,6 +13,7 @@ export const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
     mode2d: 'transparent',
     lighting: 'studio',
     material: 'matte',
+    projection: 'perspective',
   },
 };
 

@@ -84,6 +84,7 @@ function mergeGlobal(raw: Partial<GlobalSettings> | undefined): GlobalSettings {
       mode2d,
       lighting: rawView.lighting ?? base.view.lighting,
       material: rawView.material ?? base.view.material,
+      projection: rawView.projection ?? base.view.projection,
     },
   };
 }

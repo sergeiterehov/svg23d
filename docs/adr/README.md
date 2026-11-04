@@ -23,3 +23,4 @@
 | [0014](0014-stroke-to-geometry.md) | Обводка (stroke) → отдельный элемент геометрии | Accepted |
 | [0015](0015-mask-support.md) | Маски (`mask`) как 2D-вычитание в солвере | Accepted |
 | [0016](0016-preview-rendering.md) | Рендеринг предпросмотра: плоские нормали и пресеты вида | Accepted |
+| [0017](0017-projection-and-nav-cube.md) | Проекция 3D-камеры (перспектива/ортогональ) и навигационный куб | Accepted |

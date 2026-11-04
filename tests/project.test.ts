@@ -62,10 +62,20 @@ describe('project file', () => {
     const project = makeProject();
     project.global = {
       ...project.global,
-      view: { mode2d: 'heightmap', lighting: 'flat', material: 'glossy' },
+      view: {
+        mode2d: 'heightmap',
+        lighting: 'flat',
+        material: 'glossy',
+        projection: 'orthographic',
+      },
     };
     const file = parseProjectFile(serializeProject(project));
-    expect(file.global.view).toEqual({ mode2d: 'heightmap', lighting: 'flat', material: 'glossy' });
+    expect(file.global.view).toEqual({
+      mode2d: 'heightmap',
+      lighting: 'flat',
+      material: 'glossy',
+      projection: 'orthographic',
+    });
   });
 
   it('migrates the old boolean 2D flag to a mode', () => {

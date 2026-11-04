@@ -99,6 +99,7 @@ export interface NodeSettings {
 export type ViewLighting = 'studio' | 'top' | 'flat';
 export type ViewMaterial = 'matte' | 'glossy';
 export type View2DMode = 'transparent' | 'heightmap' | 'asis';
+export type ViewProjection = 'perspective' | 'orthographic';
 
 /** Display preferences; they never affect geometry. */
 export interface ViewSettings {
@@ -106,6 +107,8 @@ export interface ViewSettings {
   mode2d: View2DMode;
   lighting: ViewLighting;
   material: ViewMaterial;
+  /** 3D camera: perspective (natural depth) or orthographic (parallel edges, CAD-like). */
+  projection: ViewProjection;
 }
 
 export interface GlobalSettings {
