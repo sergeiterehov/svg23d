@@ -22,8 +22,8 @@ export const DEFAULT_VIEW: ViewOptions = {
 export interface ViewerHandle {
   /** `frame: true` re-frames the camera; by default the current view is preserved. */
   setParts: (parts: PartMesh[], options?: { frame?: boolean }) => void;
-  /** Highlights one part with a light-blue outline; `null` clears the selection. */
-  setSelectedPart: (partId: string | null) => void;
+  /** Highlights the given parts with a light-blue outline. */
+  setSelectedParts: (partIds: string[]) => void;
   /** Material/lighting/projection presets; does not rebuild geometry. */
   setView: (view: ViewOptions) => void;
   /** Mounts the orientation cube; returns a detach function. */
@@ -38,6 +38,8 @@ export interface ViewerOptions {
   onBackgroundClick?: () => void;
   /** Called when a click hits a part; argument is the part id (a tree node id). */
   onPartClick?: (partId: string) => void;
+  /** ⌘/Ctrl-click on a part: add it to the selection instead of replacing it. */
+  onPartAdd?: (partId: string) => void;
   view?: ViewOptions;
 }
 
@@ -101,7 +103,7 @@ export function createViewer(container: HTMLElement, options: ViewerOptions = {}
   composer.addPass(outlinePass);
   composer.addPass(new OutputPass());
 
-  let selectedPartId: string | null = null;
+  let selectedPartIds: string[] = [];
 
   // Distinguish "click on empty space" from orbiting: only short, non-moving presses count.
   const raycaster = new THREE.Raycaster();
@@ -132,7 +134,9 @@ export function createViewer(container: HTMLElement, options: ViewerOptions = {}
       return;
     }
     const partId = hits[0].object.userData.partId as string | undefined;
-    if (partId) options.onPartClick?.(partId);
+    if (!partId) return;
+    if (event.metaKey || event.ctrlKey) options.onPartAdd?.(partId);
+    else options.onPartClick?.(partId);
   };
 
   canvas.addEventListener('pointerdown', handlePointerDown);
@@ -374,10 +378,9 @@ export function createViewer(container: HTMLElement, options: ViewerOptions = {}
   });
 
   const applySelection = (): void => {
-    const mesh = partsGroup.children.find(
-      (child) => (child.userData.partId as string | undefined) === selectedPartId,
+    outlinePass.selectedObjects = partsGroup.children.filter((child) =>
+      selectedPartIds.includes(child.userData.partId as string),
     );
-    outlinePass.selectedObjects = mesh ? [mesh] : [];
   };
 
   return {
@@ -419,8 +422,8 @@ export function createViewer(container: HTMLElement, options: ViewerOptions = {}
       if (wasEmpty || partOptions?.frame) frameAll();
       applySelection();
     },
-    setSelectedPart(partId) {
-      selectedPartId = partId;
+    setSelectedParts(partIds) {
+      selectedPartIds = partIds;
       applySelection();
     },
     setView(view) {

@@ -9,7 +9,8 @@ export function Preview3D() {
   const viewerRef = useRef<ViewerHandle | null>(null);
   const result = useProjectStore((s) => s.result);
   const select = useProjectStore((s) => s.select);
-  const selectedId = useProjectStore((s) => s.selectedId);
+  const toggleSelected = useProjectStore((s) => s.toggleSelected);
+  const selectedIds = useProjectStore((s) => s.selectedIds);
   const leaves = useProjectStore((s) => s.leaves);
   const project = useProjectStore((s) => s.project);
   const material = useProjectStore((s) => s.project?.global.view.material ?? 'matte');
@@ -23,6 +24,7 @@ export function Preview3D() {
     const viewer = createViewer(containerRef.current, {
       onBackgroundClick: () => select(null),
       onPartClick: (partId) => select(partId),
+      onPartAdd: (partId) => toggleSelected(partId),
     });
     viewerRef.current = viewer;
     const detachCube = navCubeRef.current ? viewer.mountNavCube(navCubeRef.current) : null;
@@ -31,7 +33,7 @@ export function Preview3D() {
       viewer.dispose();
       viewerRef.current = null;
     };
-  }, [select]);
+  }, [select, toggleSelected]);
 
   useEffect(() => {
     // Frame the camera only when the document changes, so a rebuild never jumps the view.
@@ -40,14 +42,16 @@ export function Preview3D() {
     viewerRef.current?.setParts(result?.parts ?? [], { frame: shouldFrame });
   }, [result, documentHash]);
 
-  const selectedPartId = useMemo(
-    () => (project ? partIdForSelection(project.document.root, leaves, selectedId) : null),
-    [project, leaves, selectedId],
-  );
+  const selectedPartIds = useMemo(() => {
+    if (!project) return [];
+    return selectedIds
+      .map((id) => partIdForSelection(project.document.root, leaves, id))
+      .filter((id): id is string => id !== null);
+  }, [project, leaves, selectedIds]);
 
   useEffect(() => {
-    viewerRef.current?.setSelectedPart(selectedPartId);
-  }, [selectedPartId, result]);
+    viewerRef.current?.setSelectedParts(selectedPartIds);
+  }, [selectedPartIds, result]);
 
   useEffect(() => {
     viewerRef.current?.setView({ material, lighting, projection });

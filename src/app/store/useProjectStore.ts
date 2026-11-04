@@ -94,7 +94,7 @@ interface AppState {
   result: BuildResultState | null;
   status: Status;
   error: string | null;
-  selectedId: string | null;
+  selectedIds: string[];
   hoveredId: string | null;
   viewMode: ViewMode;
   exporting: boolean;
@@ -110,10 +110,15 @@ interface AppState {
   shiftNode: (nodeId: string, direction: 1 | -1) => void;
   distributeZ: () => void;
   updateSettings: (nodeId: string, patch: NodeSettings) => void;
+  /** Applies per-node patches as one undo step (multi-selection editing). */
+  updateSettingsBatch: (patches: Record<string, NodeSettings>) => void;
   updateGlobal: (patch: Partial<GlobalSettings>) => void;
   /** Display-only settings: never schedule a rebuild. */
   updateView: (patch: Partial<ViewSettings>) => void;
+  /** Replaces the selection with a single node (`null` clears it). */
   select: (nodeId: string | null) => void;
+  /** Adds or removes one node from the selection (⌘/Ctrl-click). */
+  toggleSelected: (nodeId: string) => void;
   hover: (nodeId: string | null) => void;
   setViewMode: (mode: ViewMode) => void;
   rebuild: () => void;
@@ -131,7 +136,7 @@ export const useProjectStore = create<AppState>()((set, get) => ({
   result: null,
   status: 'empty',
   error: null,
-  selectedId: null,
+  selectedIds: [],
   hoveredId: null,
   viewMode: '3d',
   exporting: false,
@@ -155,7 +160,7 @@ export const useProjectStore = create<AppState>()((set, get) => ({
       lastCommit = null;
       set({
         project,
-        selectedId: null,
+        selectedIds: [],
         hoveredId: null,
         result: null,
         error: null,
@@ -189,7 +194,7 @@ export const useProjectStore = create<AppState>()((set, get) => ({
       lastCommit = null;
       set({
         project,
-        selectedId: null,
+        selectedIds: [],
         hoveredId: null,
         result: null,
         error: null,
@@ -277,6 +282,26 @@ export const useProjectStore = create<AppState>()((set, get) => ({
     scheduleRebuild(set, get, 0);
   },
 
+  updateSettingsBatch: (patches) => {
+    const { project } = get();
+    if (!project || Object.keys(patches).length === 0) return;
+    pushHistory(set, get, 'settings:batch');
+    const settings: Record<string, NodeSettings> = { ...project.settings };
+    for (const [nodeId, patch] of Object.entries(patches)) {
+      const next: NodeSettings = { ...(settings[nodeId] ?? {}) };
+      for (const [key, value] of Object.entries(patch) as Array<[keyof NodeSettings, unknown]>) {
+        if (value === undefined || value === null) {
+          delete next[key];
+        } else {
+          (next as Record<string, unknown>)[key] = value;
+        }
+      }
+      settings[nodeId] = next;
+    }
+    set({ project: { ...project, settings } });
+    scheduleRebuild(set, get, REBUILD_DEBOUNCE_MS);
+  },
+
   updateSettings: (nodeId, patch) => {
     const { project } = get();
     if (!project) return;
@@ -320,7 +345,16 @@ export const useProjectStore = create<AppState>()((set, get) => ({
     });
   },
 
-  select: (nodeId) => set({ selectedId: nodeId }),
+  select: (nodeId) => set({ selectedIds: nodeId ? [nodeId] : [] }),
+
+  toggleSelected: (nodeId) => {
+    const { selectedIds } = get();
+    set({
+      selectedIds: selectedIds.includes(nodeId)
+        ? selectedIds.filter((id) => id !== nodeId)
+        : [...selectedIds, nodeId],
+    });
+  },
   hover: (nodeId) => set({ hoveredId: nodeId }),
   setViewMode: (mode) => set({ viewMode: mode }),
 
@@ -350,7 +384,7 @@ export const useProjectStore = create<AppState>()((set, get) => ({
       result: null,
       status: 'empty',
       error: null,
-      selectedId: null,
+      selectedIds: [],
       past: [],
       future: [],
     });

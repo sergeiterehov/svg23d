@@ -27,7 +27,7 @@ function collectSubtreeIds(node: SvgDocNode, out: Set<string> = new Set()): Set<
  */
 export function Preview2D() {
   const project = useProjectStore((s) => s.project);
-  const selectedId = useProjectStore((s) => s.selectedId);
+  const selectedIds = useProjectStore((s) => s.selectedIds);
   const hoveredId = useProjectStore((s) => s.hoveredId);
   const select = useProjectStore((s) => s.select);
   const hover = useProjectStore((s) => s.hover);
@@ -43,8 +43,11 @@ export function Preview2D() {
   const height = Math.max(viewBox.maxY - viewBox.minY, 1e-6);
   const shapes = collectShapes(root, project.settings);
 
-  const selectedNode = selectedId ? findNode(root, selectedId) : null;
-  const highlighted = selectedNode ? collectSubtreeIds(selectedNode) : new Set<string>();
+  const highlighted = new Set<string>();
+  for (const id of selectedIds) {
+    const node = findNode(root, id);
+    if (node) for (const child of collectSubtreeIds(node)) highlighted.add(child);
+  }
   if (hoveredId) highlighted.add(hoveredId);
 
   const unit = Math.max(width, height);

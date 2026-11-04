@@ -26,8 +26,9 @@ export function LayerTree() {
 
 function TreeRow({ node, depth }: { node: SvgDocNode; depth: number }) {
   const project = useProjectStore((s) => s.project);
-  const selectedId = useProjectStore((s) => s.selectedId);
+  const selectedIds = useProjectStore((s) => s.selectedIds);
   const select = useProjectStore((s) => s.select);
+  const toggleSelected = useProjectStore((s) => s.toggleSelected);
   const hover = useProjectStore((s) => s.hover);
   const updateSettings = useProjectStore((s) => s.updateSettings);
   const shiftNode = useProjectStore((s) => s.shiftNode);
@@ -41,7 +42,7 @@ function TreeRow({ node, depth }: { node: SvgDocNode; depth: number }) {
     project.global,
     node.id,
   );
-  const isSelected = selectedId === node.id;
+  const isSelected = selectedIds.includes(node.id);
   const hasChildren = node.children.length > 0;
   const isPart = project.settings[node.id]?.isPart === true;
   const children = [...orderedChildren(node, project.settings)].reverse();
@@ -55,7 +56,11 @@ function TreeRow({ node, depth }: { node: SvgDocNode; depth: number }) {
         )}
         style={{ paddingLeft: 8 + depth * 12 }}
         data-node-row={node.id}
-        onClick={() => select(node.id)}
+        onClick={(event) => {
+          // ⌘/Ctrl-click extends the selection instead of replacing it.
+          if (event.metaKey || event.ctrlKey) toggleSelected(node.id);
+          else select(node.id);
+        }}
         onMouseEnter={() => hover(node.id)}
         onMouseLeave={() => hover(null)}
         title={`${node.tag} · ${node.id}`}
