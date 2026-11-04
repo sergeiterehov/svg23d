@@ -5,7 +5,16 @@ import { fileURLToPath } from 'node:url';
 
 const resolvePath = (path: string) => fileURLToPath(new URL(path, import.meta.url));
 
-export default defineConfig({
+/**
+ * A production build is served from a sub-path on GitHub Pages (`/svg23d/`), while the dev server
+ * stays on `/`. The sub-path is the repository name, so renaming the repo means renaming it here
+ * too (ADR-0034).
+ */
+const PAGES_BASE = '/svg23d/';
+
+export default defineConfig(({ mode }) => ({
+  // `mode` (not `command`) so that `vite preview` also serves the bundle from the sub-path.
+  base: mode === 'production' ? PAGES_BASE : '/',
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
@@ -23,4 +32,4 @@ export default defineConfig({
     include: ['tests/**/*.test.ts'],
     testTimeout: 20000,
   },
-});
+}));

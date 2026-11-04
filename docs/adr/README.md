@@ -40,3 +40,4 @@
 | [0031](0031-browser-project-library.md)      | Библиотека проектов в браузере: IndexedDB, автосохранение, список в шапке    | Accepted |
 | [0032](0032-import-starts-from-defaults.md)  | Импорт SVG начинается с заводских настроек; вид сохраняется                  | Accepted |
 | [0033](0033-tool-dialogs.md)                 | Инструменты панели слоёв: список без форм, настройки — в диалоге             | Accepted |
+| [0034](0034-github-pages-deploy.md)          | Публикация на GitHub Pages через Actions: подпуть `/svg23d/`, артефакт       | Accepted |

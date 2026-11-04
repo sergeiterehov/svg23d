@@ -3,6 +3,9 @@
 Веб-приложение: загрузить плоский SVG (пейзаж, логотип, иллюстрацию из векторного редактора) и получить
 готовую к печати 3D-модель — набор отдельных деталей с гнёздами, допусками и фасками.
 
+**Демо:** <https://sergeiterehov.github.io/svg23d/> — собирается и публикуется из `main` автоматически
+(GitHub Actions → Pages, см. `docs/adr/0034-github-pages-deploy.md`).
+
 Документация:
 
 - `docs/PLAN.md` — план работ по этапам, критерии приёмки, текущий статус.
@@ -19,9 +22,10 @@
 ```bash
 npm install
 npm run dev        # http://localhost:5173
-npm test           # vitest (44 теста, включая инварианты объёма)
+npm test           # vitest
 npm run lint
-npm run build      # tsc --noEmit && vite build
+npm run build      # tsc --noEmit && vite build (подпуть /svg23d/ для Pages)
+npm run preview    # посмотреть собранный бандл: http://localhost:4173/svg23d/
 ```
 
 Проекты хранятся **в браузере**: последний открытый поднимается сразу при запуске, а имя в шапке — это
