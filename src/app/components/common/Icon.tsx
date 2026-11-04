@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import clsx from 'clsx';
 
@@ -130,35 +130,51 @@ export function EyeOffIcon({ className }: IconProps) {
 }
 
 /** Small "?" bubble with an instant custom popover (the native `title` tooltip has a long delay).
- * Rendered through a portal with fixed coordinates so it is never clipped by scrolling panels.
+ * Rendered through a portal with fixed coordinates so it is never clipped by scrolling panels;
+ * the bubble is measured first and clamped to the viewport on both axes.
  */
 export function HelpHint({ text }: { text: string }) {
   const anchorRef = useRef<HTMLSpanElement>(null);
+  const tipRef = useRef<HTMLSpanElement>(null);
+  const [anchor, setAnchor] = useState<{ left: number; right: number; top: number } | null>(null);
   const [position, setPosition] = useState<{ left: number; top: number } | null>(null);
 
   const open = (): void => {
     const rect = anchorRef.current?.getBoundingClientRect();
     if (!rect) return;
-    const width = 240;
-    const gap = 8;
-    let left = rect.right + gap;
-    if (left + width > window.innerWidth - gap) left = rect.left - width - gap;
-    left = Math.max(gap, Math.min(left, window.innerWidth - width - gap));
-    const top = Math.max(gap, Math.min(rect.top - 6, window.innerHeight - 140));
-    setPosition({ left, top });
+    setAnchor({ left: rect.left, right: rect.right, top: rect.top });
   };
-  const close = (): void => setPosition(null);
+  const close = (): void => setAnchor(null);
+
+  useLayoutEffect(() => {
+    const tip = tipRef.current;
+    if (!anchor || !tip) {
+      setPosition(null);
+      return;
+    }
+    const gap = 8;
+    const width = tip.offsetWidth;
+    const height = tip.offsetHeight;
+    let left = anchor.right + gap;
+    if (left + width > window.innerWidth - gap) left = anchor.left - width - gap;
+    left = Math.min(Math.max(gap, left), Math.max(gap, window.innerWidth - width - gap));
+    const top = Math.min(
+      Math.max(gap, anchor.top - 6),
+      Math.max(gap, window.innerHeight - height - gap),
+    );
+    setPosition({ left, top });
+  }, [anchor, text]);
 
   useEffect(() => {
-    if (!position) return;
-    const hide = (): void => setPosition(null);
+    if (!anchor) return;
+    const hide = (): void => setAnchor(null);
     window.addEventListener('scroll', hide, true);
     window.addEventListener('resize', hide);
     return () => {
       window.removeEventListener('scroll', hide, true);
       window.removeEventListener('resize', hide);
     };
-  }, [position]);
+  }, [anchor]);
 
   return (
     <>
@@ -171,15 +187,16 @@ export function HelpHint({ text }: { text: string }) {
         onMouseLeave={close}
         onFocus={open}
         onBlur={close}
-        className="inline-grid h-3.5 w-3.5 shrink-0 cursor-help place-items-center rounded-full border border-slate-600 text-[9px] leading-none text-slate-400 outline-none hover:border-slate-400 hover:text-slate-200 focus-visible:border-sky-500"
+        className="inline-grid h-[11px] w-[11px] shrink-0 cursor-help place-items-center rounded-full border border-slate-600 text-[8px] leading-none text-slate-400 outline-none hover:border-slate-400 hover:text-slate-200 focus-visible:border-sky-500"
       >
         ?
       </span>
-      {position &&
+      {anchor &&
         createPortal(
           <span
+            ref={tipRef}
             role="tooltip"
-            style={{ left: position.left, top: position.top }}
+            style={{ left: position?.left ?? 0, top: position?.top ?? 0, opacity: position ? 1 : 0 }}
             className="pointer-events-none fixed z-50 block w-60 rounded-md border border-slate-700 bg-slate-900/98 px-2.5 py-2 text-[11px] leading-snug text-slate-200 shadow-xl"
           >
             {text}

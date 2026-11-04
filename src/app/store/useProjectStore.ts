@@ -33,13 +33,29 @@ export type ViewMode = '2d' | '3d';
 export type Status = 'empty' | 'building' | 'ready' | 'error';
 export type ExampleId = 'html5' | 'landscape' | 'name';
 
-export const EXAMPLES: Record<ExampleId, { fileName: string; source: string }> = {
-  html5: { fileName: 'html5.svg', source: sampleSvg },
-  landscape: { fileName: 'landscape.svg', source: landscapeSvg },
-  name: { fileName: 'name.svg', source: nameSvg },
+export const EXAMPLES: Record<
+  ExampleId,
+  { fileName: string; source: string; label: string; description: string }
+> = {
+  html5: {
+    fileName: 'html5.svg',
+    source: sampleSvg,
+    label: 'HTML5',
+    description: 'Логотип HTML5',
+  },
+  landscape: {
+    fileName: 'landscape.svg',
+    source: landscapeSvg,
+    label: 'Пейзаж',
+    description: 'Пейзаж со слоями',
+  },
+  name: {
+    fileName: 'name.svg',
+    source: nameSvg,
+    label: 'Текст',
+    description: 'Текст с обводкой',
+  },
 };
-
-export const DEFAULT_EXAMPLE: ExampleId = 'html5';
 
 const REBUILD_DEBOUNCE_MS = 140;
 const HISTORY_LIMIT = 60;

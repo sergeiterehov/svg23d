@@ -19,6 +19,7 @@ export function Toolbar() {
   const redo = useProjectStore((s) => s.redo);
   const saveProject = useProjectStore((s) => s.saveProject);
   const openProject = useProjectStore((s) => s.openProject);
+  const loadSvgText = useProjectStore((s) => s.loadSvgText);
   const fileInput = useRef<HTMLInputElement>(null);
   const exportTip = useTooltip(
     '3MF: отдельные объекты и цвета — для Bambu Studio и других слайсеров',
@@ -60,7 +61,7 @@ export function Toolbar() {
 
         <div className="flex items-center gap-0.5">
           <IconButton
-            label="Открыть проект (.svg23d.json)"
+            label="Открыть SVG или проект (.svg23d.json)"
             onClick={() => fileInput.current?.click()}
             className={iconClass}
           >
@@ -112,11 +113,16 @@ export function Toolbar() {
       <input
         ref={fileInput}
         type="file"
-        accept=".json,application/json"
+        accept=".json,.svg,application/json,image/svg+xml"
         className="hidden"
         onChange={(event) => {
           const file = event.target.files?.[0];
-          if (file) void file.text().then(openProject);
+          if (file) {
+            // The upload panel is only visible for an empty document, so replacing the SVG
+            // goes through this file picker too.
+            if (/\.svg$/i.test(file.name)) void file.text().then((text) => loadSvgText(text, file.name));
+            else void file.text().then(openProject);
+          }
           event.target.value = '';
         }}
       />

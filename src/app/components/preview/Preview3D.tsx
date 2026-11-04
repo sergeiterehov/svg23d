@@ -56,11 +56,7 @@ export function Preview3D() {
   return (
     <div className="relative h-full w-full">
       <div ref={containerRef} className="h-full w-full" />
-      <div
-        ref={navCubeRef}
-        title="Ориентация: щёлкните по грани, чтобы повернуть камеру"
-        className="absolute bottom-3 right-3 z-10 h-[96px] w-[96px] overflow-hidden rounded-xl border border-slate-700/70 bg-slate-900/80 shadow-lg backdrop-blur-sm"
-      />
+      <div ref={navCubeRef} className="absolute bottom-3 right-3 z-10 h-[96px] w-[96px]" />
       {!result && (
         <div className="pointer-events-none absolute inset-0 grid place-items-center text-sm text-slate-500">
           Модель ещё не построена

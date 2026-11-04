@@ -16,7 +16,18 @@ export function Inspector() {
   const project = useProjectStore((s) => s.project);
   const selectedId = useProjectStore((s) => s.selectedId);
 
-  if (!project) return null;
+  if (!project) {
+    return (
+      <div className="grid h-full place-items-center p-6 text-center">
+        <div className="space-y-1">
+          <p className="text-xs text-slate-400">Настройки появятся после загрузки SVG</p>
+          <p className="text-[11px] leading-relaxed text-slate-600">
+            Загрузите файл или выберите пример — внизу, в статусбаре.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   const node = selectedId ? findNode(project.document.root, selectedId) : null;
 
