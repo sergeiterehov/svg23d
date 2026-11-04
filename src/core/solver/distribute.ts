@@ -2,21 +2,16 @@ import type { BBox, GlobalSettings, NodeSettings, SvgDocNode } from '../model/ty
 import { findNode, findPartRoots } from './resolveLeaves';
 
 /**
- * "Разложить по слоям": build a physical stack from the cut order.
+ * "Разложить по слоям": turns the cut order into a physical stack (see ADR-0018).
  *
- * Rule (see ADR-0018): an element stands on the highest layer that **fully covers its footprint**
- * (`boxContains`), sunk by `SINK_MM` so the upper part leaves a socket in the lower one. It is the
- * layer the element visually lies on, not simply its neighbour in the document:
+ * The height of an element is **derived from the elements it intersects**, not fixed:
+ * its bottom is the lowest bottom among them and its top is `LAYER_MM` above the highest top.
+ * So a later element always ends above everything it overlaps (a trunk crossed by crowns stays
+ * underneath them), and an element with a single intersection is built exactly from it.
  *
- * - the sky covers everything, the hill covers the trunk → the trunk stands on the hill;
- * - a tree crown sticks out above the hill, so nothing but the sky covers it → the crown stands
- *   on the sky, next to the hill;
- * - elements that intersect but do not cover each other (two crossing bars) stack on the higher
- *   of the two, and fully disjoint elements share the base layer.
+ * Elements that intersect nothing keep the project defaults — that is the base plate.
  */
 export const LAYER_MM = 5;
-/** How deep a level sinks into the layer it stands on, in mm. */
-export const SINK_MM = 1;
 
 interface MutableBox {
   minX: number;
@@ -47,30 +42,8 @@ function boxesOverlap(a: BBox, b: BBox): boolean {
   return a.minX < b.maxX && b.minX < a.maxX && a.minY < b.maxY && b.minY < a.maxY;
 }
 
-/** `inner` lies completely inside `outer` (footprint comparison, not exact geometry). */
-function boxContains(outer: BBox, inner: BBox): boolean {
-  const eps = 1e-6;
-  return (
-    inner.minX >= outer.minX - eps &&
-    inner.maxX <= outer.maxX + eps &&
-    inner.minY >= outer.minY - eps &&
-    inner.maxY <= outer.maxY + eps
-  );
-}
-
 function round(value: number): number {
   return Math.round(value * 100) / 100;
-}
-
-/** Top of the layer the element stands on, or `null` when it rests on the plate itself. */
-function supportFor(placed: Array<{ zTo: number; box: BBox | null }>, box: BBox): number | null {
-  const covering = placed.filter((item) => item.box && boxContains(item.box, box));
-  if (covering.length > 0) return Math.max(...covering.map((item) => item.zTo));
-
-  const crossing = placed.filter((item) => item.box && boxesOverlap(item.box, box));
-  if (crossing.length > 0) return Math.max(...crossing.map((item) => item.zTo));
-
-  return null;
 }
 
 /** Returns the per-part settings with `zFrom`/`zTo` assigned. */
@@ -80,17 +53,25 @@ export function distributeLayers(
   global: GlobalSettings,
 ): Record<string, NodeSettings> {
   const next: Record<string, NodeSettings> = { ...settings };
-  const placed: Array<{ zTo: number; box: BBox | null }> = [];
+  const placed: Array<{ zFrom: number; zTo: number; box: BBox | null }> = [];
 
   // Paint order: the first part is drawn first, so it is the bottom of the stack.
   for (const id of findPartRoots(root, settings)) {
     const node = findNode(root, id);
     const box = node ? subtreeBox(node) : null;
-    const supportTop = box ? supportFor(placed, box) : null;
-    const zFrom = supportTop === null ? round(global.defaultZFrom) : round(supportTop - SINK_MM);
-    const zTo = round(zFrom + LAYER_MM);
+    const below = box ? placed.filter((item) => item.box && boxesOverlap(item.box, box)) : [];
 
-    placed.push({ zTo, box });
+    let zFrom: number;
+    let zTo: number;
+    if (below.length === 0) {
+      zFrom = round(global.defaultZFrom);
+      zTo = round(global.defaultZTo);
+    } else {
+      zFrom = round(Math.min(...below.map((item) => item.zFrom)));
+      zTo = round(Math.max(...below.map((item) => item.zTo)) + LAYER_MM);
+    }
+
+    placed.push({ zFrom, zTo, box });
     next[id] = { ...(next[id] ?? {}), zFrom, zTo };
   }
 

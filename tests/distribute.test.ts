@@ -3,17 +3,21 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_GLOBAL_SETTINGS } from '@core/model/defaults';
-import { distributeLayers, LAYER_MM, SINK_MM } from '@core/solver/distribute';
+import { distributeLayers, LAYER_MM } from '@core/solver/distribute';
 import { findPartRoots } from '@core/solver/resolveLeaves';
 import { parseSvg } from '@core/svg/parseSvg';
 
 const landscape = readFileSync(resolve(process.cwd(), 'samples/landscape.svg'), 'utf8');
 const html5 = readFileSync(resolve(process.cwd(), 'samples/html5.svg'), 'utf8');
 
-/** Z range of a layer `n` steps above the plate. */
-function layer(n: number): [number, number] {
-  const zFrom = n * (LAYER_MM - SINK_MM);
-  return [zFrom, zFrom + LAYER_MM];
+const BASE_FROM = DEFAULT_GLOBAL_SETTINGS.defaultZFrom;
+const BASE_TO = DEFAULT_GLOBAL_SETTINGS.defaultZTo;
+
+/** Element with no intersections rests on the project defaults. */
+const base: [number, number] = [BASE_FROM, BASE_TO];
+/** Element built on top of intersections whose highest top is `BASE_TO`. */
+function above(steps = 1): [number, number] {
+  return [BASE_FROM, BASE_TO + steps * LAYER_MM];
 }
 
 function ranges(source: string): Record<string, [number, number]> {
@@ -27,30 +31,30 @@ function ranges(source: string): Record<string, [number, number]> {
 }
 
 describe('distributeLayers', () => {
-  it('stands each landscape element on the layer that covers it', () => {
-    // sky covers everything → it is the base. Sun and hill only lie on the sky, so they share
-    // layer 1. The hill covers the trunk → the trunk climbs onto it. The crowns stick out above
-    // the hill, so nothing but the sky covers them: they stay on layer 1.
+  it('derives each landscape height from what the element intersects', () => {
+    // sky is the plate; sun and hill only meet the sky, so both end 5 mm above it; the trunk is
+    // crossed by the crowns, so each crown ends above the trunk instead of the other way round.
     expect(ranges(landscape)).toEqual({
-      sky: layer(0),
-      sun: layer(1),
-      hill: layer(1),
-      trunk: layer(2),
-      crown: layer(1),
-      'crown-2': layer(1),
+      sky: base,
+      sun: above(1),
+      hill: above(1),
+      trunk: above(2),
+      crown: above(3),
+      'crown-2': above(4),
     });
   });
 
-  it('does not stack elements that only touch each other', () => {
-    // HTML5 shapes overlap along their edges but never cover one another, so they end up in the
-    // same band above the first one.
+  it('puts every later HTML5 shape above the ones it overlaps', () => {
     const result = ranges(html5);
     const values = Object.values(result);
-    expect(values[0]).toEqual(layer(0));
-    for (const value of values.slice(1)) expect(value).toEqual(layer(1));
+    expect(values[0]).toEqual(base);
+    for (const value of values.slice(1)) expect(value[0]).toBe(BASE_FROM);
+    // Tops strictly grow along the paint order (each shape overlaps the previous one).
+    const tops = values.map((value) => value[1]);
+    for (let i = 1; i < tops.length; i += 1) expect(tops[i]).toBeGreaterThanOrEqual(tops[i - 1]);
   });
 
-  it('keeps fully disjoint elements on the base layer', () => {
+  it('keeps fully disjoint elements on the project defaults', () => {
     const source =
       '<svg viewBox="0 0 100 100"><g>' +
       '<rect x="0" y="0" width="40" height="40"/>' +
@@ -58,12 +62,10 @@ describe('distributeLayers', () => {
       '</g></svg>';
     const values = Object.values(ranges(source));
     expect(values).toHaveLength(2);
-    for (const range of values) expect(range).toEqual(layer(0));
+    for (const range of values) expect(range).toEqual(base);
   });
 
-  it('stacks crossing elements on the higher one and keeps a covered element on its cover', () => {
-    // The bar spans wider than the block, so it is not covered by it — it crosses the block and
-    // lands on the block's level. Nothing else climbs.
+  it('spans from the lowest bottom to 5 mm above the highest top of the intersections', () => {
     const source =
       '<svg viewBox="0 0 100 100"><g>' +
       '<rect id="base" x="0" y="0" width="100" height="100"/>' +
@@ -71,8 +73,9 @@ describe('distributeLayers', () => {
       '<rect id="bar" x="0" y="40" width="100" height="20"/>' +
       '</g></svg>';
     const result = ranges(source);
-    expect(result.base).toEqual(layer(0));
-    expect(result.block).toEqual(layer(1));
-    expect(result.bar).toEqual(layer(1));
+    expect(result.base).toEqual(base);
+    expect(result.block).toEqual(above(1));
+    // The bar crosses both the base and the block, so it ends above the block.
+    expect(result.bar).toEqual(above(2));
   });
 });

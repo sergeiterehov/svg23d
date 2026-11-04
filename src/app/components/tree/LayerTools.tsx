@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useProjectStore } from '../../store/useProjectStore';
 import { ToolsIcon } from '../common/Icon';
 import { IconButton } from '../common/IconButton';
-import { LAYER_MM, SINK_MM } from '@core/solver/distribute';
+import { LAYER_MM } from '@core/solver/distribute';
 
 /**
  * Tools menu of the layers panel. It lives in the panel header because its actions operate on the
@@ -61,14 +61,12 @@ export function LayerTools() {
             className="block w-full px-3 py-1.5 text-left transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:hover:bg-transparent"
           >
             <span
-              className={
-                isEmpty ? 'block text-xs text-slate-600' : 'block text-xs text-slate-200'
-              }
+              className={isEmpty ? 'block text-xs text-slate-600' : 'block text-xs text-slate-200'}
             >
               Разложить по слоям
             </span>
             <span className="mt-0.5 block text-[10px] leading-snug text-slate-500">
-              Полоса {LAYER_MM} мм с заходом {SINK_MM} мм в слой под деталью
+              От нижнего пересечения до {LAYER_MM} мм выше верхнего
             </span>
           </button>
         </div>
