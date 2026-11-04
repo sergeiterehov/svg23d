@@ -24,9 +24,20 @@ export const DEFAULT_VIEW: ViewOptions = {
 const GRID_SIZE_MM = 256;
 const GRID_DIVISIONS = 16;
 
+/** Camera pose that survives a 2D/3D switch (the viewer itself is re-created then). */
+export interface CameraState {
+  position: [number, number, number];
+  target: [number, number, number];
+  zoom: number;
+}
+
 export interface ViewerHandle {
   /** `frame: true` re-frames the camera; by default the current view is preserved. */
   setParts: (parts: PartMesh[], options?: { frame?: boolean }) => void;
+  /** Current orbit pose, to be restored with `setCameraState` after a remount. */
+  getCameraState: () => CameraState;
+  /** Restores a previously saved pose, including the orthographic zoom. */
+  setCameraState: (state: CameraState) => void;
   /** Highlights the given parts with a light-blue outline. */
   setSelectedParts: (partIds: string[]) => void;
   /** Height band of the selection: the arrows sit on its top/bottom; `null` hides them. */
@@ -95,6 +106,7 @@ export function createViewer(container: HTMLElement, options: ViewerOptions = {}
   interface ViewerCamera extends THREE.Camera {
     near: number;
     far: number;
+    zoom: number;
     updateProjectionMatrix: () => void;
   }
 
@@ -518,6 +530,27 @@ export function createViewer(container: HTMLElement, options: ViewerOptions = {}
     setSelectedParts(partIds) {
       selectedPartIds = partIds;
       applySelection();
+    },
+    getCameraState() {
+      return {
+        position: [camera.position.x, camera.position.y, camera.position.z],
+        target: [controls.target.x, controls.target.y, controls.target.z],
+        zoom: camera.zoom,
+      };
+    },
+    setCameraState(state) {
+      // Both cameras share the pose, so a later projection switch keeps the restored view.
+      for (const item of [perspective, ortho]) {
+        item.position.set(...state.position);
+        item.zoom = state.zoom;
+        const distance = item.position.distanceTo(new THREE.Vector3(...state.target));
+        item.near = Math.max(distance / 200, 0.01);
+        item.far = distance * 20;
+        item.updateProjectionMatrix();
+      }
+      controls.target.set(...state.target);
+      viewTransition = null;
+      controls.update();
     },
     setHeightRange(range) {
       handles.setRange(range);

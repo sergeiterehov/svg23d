@@ -1,11 +1,18 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useProjectStore, HEIGHT_STEP_MM } from '../../store/useProjectStore';
-import { createViewer, type ViewerHandle } from '@viewer/createViewer';
+import { createViewer, type CameraState, type ViewerHandle } from '@viewer/createViewer';
 import { partIdForSelection } from '@core/solver/selection';
 import { collectSubtreeIds } from '@core/solver/selection';
 import { effectiveSettingsFor } from '@core/solver/inheritance';
 import { findNode } from '@core/solver/resolveLeaves';
 import { bboxOfContours } from '@core/model/defaults';
+
+/**
+ * Switching to 2D unmounts the viewer (and its WebGL context), so the camera pose is kept here, next
+ * to the component rather than inside it. It is tied to the document hash: another document is framed
+ * from scratch instead of inheriting the previous view.
+ */
+let savedCamera: { hash: string | null; state: CameraState } | null = null;
 
 export function Preview3D() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -23,6 +30,8 @@ export function Preview3D() {
   const projection = useProjectStore((s) => s.project?.global.view.projection ?? 'perspective');
   const documentHash = useProjectStore((s) => s.project?.document.hash ?? null);
   const framedHashRef = useRef<string | null>(null);
+  /** False until the stored pose has been applied again; keeps it from being overwritten meanwhile. */
+  const poseLiveRef = useRef(true);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -51,7 +60,28 @@ export function Preview3D() {
     });
     viewerRef.current = viewer;
     const detachCube = navCubeRef.current ? viewer.mountNavCube(navCubeRef.current) : null;
+    // Restoring the pose of the previous mount happens after the effects that frame the model and
+    // apply the projection, otherwise they would overwrite it.
+    const restore = savedCamera;
+    savedCamera = null;
+    poseLiveRef.current = restore === null;
+    if (restore && restore.hash === (useProjectStore.getState().project?.document.hash ?? null)) {
+      requestAnimationFrame(() => {
+        const active = viewerRef.current;
+        if (!active) return;
+        active.setCameraState(restore.state);
+        poseLiveRef.current = true;
+      });
+    }
     return () => {
+      // Saving keeps the pose for the next mount only; a different document is framed from scratch.
+      savedCamera = poseLiveRef.current
+        ? {
+            hash: useProjectStore.getState().project?.document.hash ?? null,
+            state: viewer.getCameraState(),
+          }
+        : // The stored pose was not applied yet (a StrictMode remount): keep it as the newest one.
+          restore;
       detachCube?.();
       viewer.dispose();
       viewerRef.current = null;
