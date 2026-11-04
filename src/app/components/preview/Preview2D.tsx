@@ -1,8 +1,9 @@
-import type { SvgDocNode, NodeSettings } from '@core/model/types';
+import type { NodeSettings, SvgDocNode } from '@core/model/types';
 import { useProjectStore } from '../../store/useProjectStore';
 import { contoursToPathData } from '@core/svg/preview';
 import { findNode } from '@core/solver/resolveLeaves';
 import { orderedChildren } from '@core/solver/order';
+import { HEIGHT_GRADIENT_CSS, heightColor } from './colorScale';
 
 function collectShapes(
   node: SvgDocNode,
@@ -21,8 +22,8 @@ function collectSubtreeIds(node: SvgDocNode, out: Set<string> = new Set()): Set<
 }
 
 /**
- * 2D preview rendered from the *computed* contours, not from the original markup:
- * what you see is exactly what will be extruded.
+ * 2D preview rendered from the *computed* contours, not from the original markup, with SVG masks
+ * taken from the same include/exclude coverage the solver uses — so the preview matches the 3D result.
  */
 export function Preview2D() {
   const project = useProjectStore((s) => s.project);
@@ -30,7 +31,8 @@ export function Preview2D() {
   const hoveredId = useProjectStore((s) => s.hoveredId);
   const select = useProjectStore((s) => s.select);
   const hover = useProjectStore((s) => s.hover);
-  const opaque = useProjectStore((s) => s.project?.global.view.opaque2d ?? false);
+  const leaves = useProjectStore((s) => s.leaves);
+  const mode = useProjectStore((s) => s.project?.global.view.mode2d ?? 'transparent');
 
   if (!project) {
     return <div className="grid h-full place-items-center text-sm text-slate-500">Нет модели</div>;
@@ -49,9 +51,26 @@ export function Preview2D() {
   const strokeNormal = unit / 900;
   const strokeActive = unit / 260;
 
+  // Height map: colour by the top face of every element.
+  const heightById = new Map(leaves.map((leaf) => [leaf.id, leaf.zTo]));
+  const heights = leaves.map((leaf) => leaf.zTo);
+  const minHeight = heights.length > 0 ? Math.min(...heights) : 0;
+  const maxHeight = heights.length > 0 ? Math.max(...heights) : 1;
+  const heightSpan = Math.max(maxHeight - minHeight, 1e-6);
+
+  const fillFor = (node: SvgDocNode): string => {
+    if (mode !== 'heightmap') return node.fill === 'none' ? '#000000' : node.fill;
+    const top = heightById.get(node.id);
+    if (top === undefined) return '#cbd5e1';
+    return heightColor((top - minHeight) / heightSpan);
+  };
+
+  const maskId = (index: number): string => `svg23d-mask-${index}`;
+  const indexed = shapes.map((node, index) => ({ node, index }));
+
   return (
     <div
-      className="h-full w-full overflow-hidden bg-[#f8fafc]"
+      className="relative h-full w-full overflow-hidden bg-[#f8fafc]"
       onClick={(event) => {
         // Empty space around the artwork → deselect and show project settings.
         if (!(event.target as Element).closest('path')) select(null);
@@ -63,18 +82,57 @@ export function Preview2D() {
         className="h-full w-full"
         onMouseLeave={() => hover(null)}
       >
-        {shapes.map((node) => {
+        <defs>
+          {indexed.map(({ node, index }) =>
+            node.maskInclude && node.maskInclude.length > 0 ? (
+              <mask
+                key={node.id}
+                id={maskId(index)}
+                maskUnits="userSpaceOnUse"
+                x={viewBox.minX}
+                y={viewBox.minY}
+                width={width}
+                height={height}
+              >
+                <path
+                  d={contoursToPathData(node.maskInclude)}
+                  fill="#ffffff"
+                  fillRule="nonzero"
+                />
+                {node.maskExclude && node.maskExclude.length > 0 && (
+                  <path
+                    d={contoursToPathData(node.maskExclude)}
+                    fill="#000000"
+                    fillRule="nonzero"
+                  />
+                )}
+              </mask>
+            ) : null,
+          )}
+        </defs>
+
+        {indexed.map(({ node, index }) => {
           const active = highlighted.has(node.id);
           // Stroke outlines are built from many overlapping polygons (discs, quads); outlining each
           // of them would show the construction, so only simple shapes get a contour.
           const simple = node.subpaths.length <= 8;
+          const opacity = node.hidden
+            ? 0.12
+            : mode === 'transparent'
+              ? active
+                ? 0.95
+                : 0.8
+              : 1;
+          const masked = node.maskInclude && node.maskInclude.length > 0;
+
           return (
             <path
               key={node.id}
               d={contoursToPathData(node.subpaths)}
-              fill={node.fill === 'none' ? '#000000' : node.fill}
+              fill={fillFor(node)}
               fillRule={node.fillRule}
-              opacity={node.hidden ? 0.12 : opaque ? 1 : active ? 0.95 : 0.8}
+              mask={masked ? `url(#${maskId(index)})` : undefined}
+              opacity={opacity}
               stroke={active && simple ? '#0ea5e9' : simple ? '#0f172a' : 'none'}
               strokeWidth={active ? strokeActive : strokeNormal}
               strokeLinejoin="round"
@@ -85,6 +143,20 @@ export function Preview2D() {
           );
         })}
       </svg>
+
+      {mode === 'heightmap' && (
+        <div className="pointer-events-none absolute bottom-3 left-3 rounded-md border border-slate-700/60 bg-slate-900/85 px-2 py-1.5">
+          <div className="h-1.5 w-32 rounded-full" style={{ background: HEIGHT_GRADIENT_CSS }} />
+          <div className="mt-1 flex justify-between text-[10px] tabular-nums text-slate-300">
+            <span>{round(minHeight)} мм</span>
+            <span>{round(maxHeight)} мм</span>
+          </div>
+        </div>
+      )}
     </div>
   );
+}
+
+function round(value: number): number {
+  return Math.round(value * 10) / 10;
 }

@@ -98,11 +98,12 @@ export interface NodeSettings {
 
 export type ViewLighting = 'studio' | 'top' | 'flat';
 export type ViewMaterial = 'matte' | 'glossy';
+export type View2DMode = 'transparent' | 'heightmap' | 'asis';
 
 /** Display preferences; they never affect geometry. */
 export interface ViewSettings {
-  /** 2D preview: paint every element fully opaque. */
-  opaque2d: boolean;
+  /** 2D preview: translucent layers, height map colours, or plain rendering. */
+  mode2d: View2DMode;
   lighting: ViewLighting;
   material: ViewMaterial;
 }

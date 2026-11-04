@@ -62,10 +62,19 @@ describe('project file', () => {
     const project = makeProject();
     project.global = {
       ...project.global,
-      view: { opaque2d: true, lighting: 'flat', material: 'glossy' },
+      view: { mode2d: 'heightmap', lighting: 'flat', material: 'glossy' },
     };
     const file = parseProjectFile(serializeProject(project));
-    expect(file.global.view).toEqual({ opaque2d: true, lighting: 'flat', material: 'glossy' });
+    expect(file.global.view).toEqual({ mode2d: 'heightmap', lighting: 'flat', material: 'glossy' });
+  });
+
+  it('migrates the old boolean 2D flag to a mode', () => {
+    const project = makeProject();
+    const text = serializeProject(project).replace(
+      '"mode2d": "transparent"',
+      '"opaque2d": true',
+    );
+    expect(parseProjectFile(text).global.view.mode2d).toBe('asis');
   });
 
   it('fills in view settings missing from older files', () => {

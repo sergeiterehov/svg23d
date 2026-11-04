@@ -283,12 +283,22 @@ function ViewPanel() {
     <section className="border-b border-slate-800 p-3">
       <h2 className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Вид</h2>
       <div className="mt-2 space-y-2">
-        <Toggle
-          label="Без прозрачности в 2D"
-          checked={view.opaque2d}
-          onChange={(checked) => updateView({ opaque2d: checked })}
-          hint="Все элементы рисуются полностью непрозрачными — видно только верхний слой"
-        />
+        <label className="block">
+          <span className="flex h-4 items-center gap-1 text-xs leading-none text-slate-400">
+            <span>Режим 2D</span>
+            <HelpHint text="Полупрозрачный — слои с прозрачностью; карта высот — окраска по высоте от холодного к горячему без прозрачности; как есть — исходные цвета без прозрачности" />
+          </span>
+          <SelectField
+            className="mt-1"
+            value={view.mode2d}
+            options={[
+              { value: 'transparent', label: 'Полупрозрачный' },
+              { value: 'heightmap', label: 'Карта высот' },
+              { value: 'asis', label: 'Как есть' },
+            ]}
+            onChange={(value) => updateView({ mode2d: value as ViewSettings['mode2d'] })}
+          />
+        </label>
 
         <label className="block">
           <span className="flex h-4 items-center gap-1 text-xs leading-none text-slate-400">

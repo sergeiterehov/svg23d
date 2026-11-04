@@ -73,9 +73,17 @@ export function parseProjectFile(text: string): ProjectFile {
 /** Fills in settings that older project files did not have (e.g. the `view` block). */
 function mergeGlobal(raw: Partial<GlobalSettings> | undefined): GlobalSettings {
   const base = DEFAULT_GLOBAL_SETTINGS;
+  const rawView = (raw?.view ?? {}) as Partial<GlobalSettings['view']> & { opaque2d?: boolean };
+  // Projects saved before the mode existed stored a boolean; true meant "no transparency".
+  const mode2d = rawView.mode2d ?? (rawView.opaque2d === true ? 'asis' : base.view.mode2d);
+
   return {
     ...base,
     ...raw,
-    view: { ...base.view, ...(raw?.view ?? {}) },
+    view: {
+      mode2d,
+      lighting: rawView.lighting ?? base.view.lighting,
+      material: rawView.material ?? base.view.material,
+    },
   };
 }

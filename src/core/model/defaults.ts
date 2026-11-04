@@ -10,7 +10,7 @@ export const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
   defaultChamferBottom: 0,
   flatness: 0.02,
   view: {
-    opaque2d: false,
+    mode2d: 'transparent',
     lighting: 'studio',
     material: 'matte',
   },
