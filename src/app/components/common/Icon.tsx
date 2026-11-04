@@ -182,6 +182,16 @@ export function RenameIcon({ className }: IconProps) {
   );
 }
 
+/** Two offset frames: a copy of the element placed next to the original. */
+export function DuplicateIcon({ className }: IconProps) {
+  return (
+    <Svg className={className}>
+      <rect x="8" y="3" width="13" height="13" rx="2" />
+      <path d="M16 16v3.5A1.5 1.5 0 0 1 14.5 21h-9A1.5 1.5 0 0 1 4 19.5v-9A1.5 1.5 0 0 1 5.5 9H8" />
+    </Svg>
+  );
+}
+
 /** Stacked sheets: «Разложить по слоям» — the parts become a physical stack. */
 export function LayersIcon({ className }: IconProps) {
   return (

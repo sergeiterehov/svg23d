@@ -64,6 +64,10 @@ export default function App() {
         // Select every printable part, the same set the tree and the 3D view show as elements.
         event.preventDefault();
         useProjectStore.getState().selectAll();
+      } else if (key === 'd' && !inField) {
+        // ⌘D duplicates the selection; the browser would otherwise bookmark the page.
+        event.preventDefault();
+        useProjectStore.getState().duplicateSelected();
       } else if (key === 'g' && !inField) {
         event.preventDefault();
         useProjectStore.getState().groupSelected();
@@ -140,7 +144,7 @@ export default function App() {
               data-keep-selection
             >
               <span>Слои</span>
-              <HelpHint text="Сверху вниз = порядок вырезания: верхний элемент делает гнёзда в нижних. Перетащите строку, чтобы переместить элемент в любую группу. Двойной клик — переименовать. ⌘/Ctrl-клик добавляет к выбору, Shift-клик выбирает диапазон, ⌘/Ctrl+A — все элементы, ⌘G — сгруппировать, ⌘U — объединить в одну деталь, Delete — удалить." />
+              <HelpHint text="Сверху вниз = порядок вырезания: верхний элемент делает гнёзда в нижних. Перетащите строку, чтобы переместить элемент в любую группу. Двойной клик — переименовать. ⌘/Ctrl-клик добавляет к выбору, Shift-клик выбирает диапазон, ⌘/Ctrl+A — все элементы, ⌘G — сгруппировать, ⌘U — объединить в одну деталь, ⌘D — дублировать, Delete — удалить." />
               <LayerTools />
             </div>
             <LayerTree />

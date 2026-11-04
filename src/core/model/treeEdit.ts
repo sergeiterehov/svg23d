@@ -23,6 +23,22 @@ export interface TreeEdit {
   removed: string[];
   /** Nodes that are printed as one object: a 2D union of everything inside (ADR-0028). */
   unions: string[];
+  /** Copies made by «Дублировать»: the overlay clones an existing subtree under fresh ids. */
+  copies: TreeCopy[];
+}
+
+/**
+ * A duplicate of an existing node (ADR-0036). The parsed SVG cannot hold it, so the copy is described
+ * here: what to clone and where the clone lives. Copies of copies are allowed — `sourceId` may point
+ * at an earlier entry.
+ */
+export interface TreeCopy {
+  /** Id of the copy root; descendants get ids derived from it. */
+  id: string;
+  /** Node that is cloned. */
+  sourceId: string;
+  /** Parent of the copy in the overlay (`''` for the document root). */
+  parentId: string;
 }
 
 export const EMPTY_TREE_EDIT: TreeEdit = {
@@ -31,6 +47,7 @@ export const EMPTY_TREE_EDIT: TreeEdit = {
   groups: [],
   removed: [],
   unions: [],
+  copies: [],
 };
 
 const ROOT = '';
@@ -45,6 +62,15 @@ export function orderKeyFor(document: { root: { id: string } }, parentId: string
 
 function cloneNode(node: SvgDocNode, depth: number): SvgDocNode {
   return { ...node, depth, children: node.children.map((child) => cloneNode(child, depth + 1)) };
+}
+
+/** Copies a subtree under a new id; descendants get `<id>.<index>` ids, which are unique with it. */
+function cloneWithIds(node: SvgDocNode, id: string): SvgDocNode {
+  return {
+    ...node,
+    id,
+    children: node.children.map((child, index) => cloneWithIds(child, `${id}.${index}`)),
+  };
 }
 
 /** `true` when `target` is `node` itself or sits somewhere inside its subtree. */
@@ -85,6 +111,23 @@ export function applyTreeEdit(document: SvgDocument, edit: TreeEdit): SvgDocumen
     };
     root.children.push(group);
     index.set(id, { node: group, parent: root });
+  }
+
+  // Duplicates (see `duplicateInTree`): a copy is a clone of a node that already exists here. Copies
+  // are inserted before the moves, so a copy that was then dragged elsewhere travels like any node.
+  // `?? []` keeps projects saved before copies existed readable.
+  for (const copy of edit.copies ?? []) {
+    if (removed.has(copy.id) || index.has(copy.id)) continue;
+    const source = index.get(copy.sourceId)?.node;
+    const target = copy.parentId === ROOT ? root : index.get(copy.parentId)?.node;
+    if (!source || !target || target.kind === 'shape') continue;
+    const clone = cloneWithIds(source, copy.id);
+    // Right after the element it duplicates: in the tree the copy shows up directly above it.
+    const at = target.children.findIndex((child) => child.id === source.id);
+    if (at >= 0) target.children.splice(at + 1, 0, clone);
+    else target.children.push(clone);
+    index.set(clone.id, { node: clone, parent: target });
+    indexTree(clone);
   }
 
   for (const [nodeId, parentId] of Object.entries(edit.parents)) {
@@ -246,6 +289,7 @@ export function createGroup(
     groups: [...edit.groups, groupId],
     removed: [...edit.removed],
     unions: [...edit.unions],
+    copies: [...(edit.copies ?? [])],
   };
   next.parents[groupId] = parentId;
   for (const id of movedIds) next.parents[id] = groupId;
@@ -299,6 +343,85 @@ export function moveNodesInTree(
   const parents = { ...edit.parents };
   for (const id of movedIds) parents[id] = parentId;
   return { edit: { ...edit, parents }, parentId, movedIds };
+}
+
+export interface DuplicateResult {
+  edit: TreeEdit;
+  /** Source id → id of its copy for the whole copied subtree; used to copy the settings over. */
+  idMap: Record<string, string>;
+  /** One entry per copied subtree, in the order of `ids`. */
+  copies: TreeCopy[];
+  /** Roots of the copies — what the selection should become. */
+  copyIds: string[];
+}
+
+/**
+ * Duplicates the selection next to the original (ADR-0036). A selected node whose ancestor is also
+ * selected is skipped: the ancestor's copy already carries it.
+ *
+ * The copy keeps the name, the children, the union flag and the paint position of its source; the
+ * geometry comes from the parsed document, so no contour is duplicated in the project file.
+ */
+export function duplicateInTree(
+  document: SvgDocument,
+  edit: TreeEdit,
+  ids: string[],
+): DuplicateResult | null {
+  const index = indexNodes(document.root);
+  const order = documentOrder(document.root);
+  const selected = new Set(ids.filter((id) => index.has(id)));
+  if (selected.size === 0) return null;
+
+  const parentOf = new Map<string, SvgDocNode>();
+  for (const [id, entry] of index) parentOf.set(id, entry.parent);
+
+  const roots = [...selected]
+    .filter((id) => !hasAncestorIn(id, parentOf, selected))
+    .sort((a, b) => (order.get(a) ?? 0) - (order.get(b) ?? 0));
+  if (roots.length === 0) return null;
+
+  // Ids that are already used, deleted ones included: a removed copy must not come back to life.
+  const taken = new Set<string>([
+    ...index.keys(),
+    ...edit.groups,
+    ...edit.removed,
+    ...(edit.copies ?? []).map((copy) => copy.id),
+  ]);
+  const idMap: Record<string, string> = {};
+  const copies: TreeCopy[] = [];
+  const names = { ...edit.names };
+  // A copy of a union is a union too: the flag lives on the node id, not on the geometry.
+  const unions = [...edit.unions];
+
+  for (const sourceId of roots) {
+    const entry = index.get(sourceId)!;
+    const parentId = entry.parent.id === document.root.id ? ROOT : entry.parent.id;
+    let number = 2;
+    let copyId = `${sourceId}-${number}`;
+    while (taken.has(copyId)) {
+      number += 1;
+      copyId = `${sourceId}-${number}`;
+    }
+    copies.push({ id: copyId, sourceId, parentId });
+
+    const walk = (node: SvgDocNode, newId: string): void => {
+      taken.add(newId);
+      idMap[node.id] = newId;
+      // Only overlay renames have to travel: the clone already carries the parsed name.
+      const renamed = edit.names[node.id];
+      if (renamed) names[newId] = renamed;
+      if (node.union === true || edit.unions.includes(node.id)) unions.push(newId);
+      node.children.forEach((child, i) => walk(child, `${newId}.${i}`));
+    };
+    walk(entry.node, copyId);
+  }
+
+  return {
+    edit: { ...edit, names, unions, copies: [...(edit.copies ?? []), ...copies] },
+    idMap,
+    copies,
+    copyIds: copies.map((copy) => copy.id),
+  };
 }
 
 export function renameInTree(

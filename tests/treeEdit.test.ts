@@ -6,7 +6,9 @@ import {
   EMPTY_TREE_EDIT,
   applyTreeEdit,
   createGroup,
+  duplicateInTree,
   findNodeIn,
+  markUnions,
   moveNodesInTree,
   orderKeyFor,
   removeFromTree,
@@ -208,6 +210,76 @@ describe('moves combined with deletions', () => {
     const edited = applyTreeEdit(base, edit);
     expect(findNodeIn(edited.root, 'a')).toBeNull();
     expect(edited.paintOrder).toEqual(['b']);
+  });
+});
+
+describe('duplicateInTree', () => {
+  it('clones a shape right above the original, with fresh ids', () => {
+    const base = document();
+    const result = duplicateInTree(base, EMPTY_TREE_EDIT, ['b'])!;
+    expect(result.copyIds).toEqual(['b-2']);
+    // The whole subtree is mapped, which is what the store uses to copy the settings over.
+    expect(result.idMap).toEqual({ b: 'b-2' });
+
+    const edited = applyTreeEdit(base, result.edit);
+    expect(childIds(edited, 'top')).toEqual(['a', 'b', 'b-2', 'inner']);
+    const copy = findNodeIn(edited.root, 'b-2')!;
+    expect(copy.name).toBe('b');
+    expect(copy.subpaths).toEqual(findNodeIn(edited.root, 'b')!.subpaths);
+    // Paint order follows the tree: the copy is drawn after (above) the original.
+    expect(edited.paintOrder).toEqual(['a', 'b', 'b-2', 'c', 'd']);
+  });
+
+  it('copies a group with its children and its union flag', () => {
+    const base = document();
+    const edit = markUnions(EMPTY_TREE_EDIT, ['inner'])!;
+    const result = duplicateInTree(base, edit, ['inner'])!;
+    const edited = applyTreeEdit(base, result.edit);
+
+    const copy = findNodeIn(edited.root, 'inner-2')!;
+    expect(copy.children.map((child) => child.id)).toEqual(['inner-2.0', 'inner-2.1']);
+    expect(copy.children.map((child) => child.name)).toEqual(['c', 'd']);
+    expect(copy.union).toBe(true);
+    expect(copy.children.every((child) => child.subpaths.length > 0)).toBe(true);
+  });
+
+  it('keeps a renamed source name on the copy', () => {
+    const base = document();
+    const edit = renameInTree(base, EMPTY_TREE_EDIT, 'inner', 'Задний план')!;
+    const result = duplicateInTree(applyTreeEdit(base, edit), edit, ['inner'])!;
+    const edited = applyTreeEdit(base, result.edit);
+    expect(findNodeIn(edited.root, 'inner-2')?.name).toBe('Задний план');
+  });
+
+  it('skips a selected child whose ancestor is selected too', () => {
+    const base = document();
+    const result = duplicateInTree(base, EMPTY_TREE_EDIT, ['inner', 'c'])!;
+    expect(result.copyIds).toEqual(['inner-2']);
+    expect(applyTreeEdit(base, result.edit).paintOrder).toEqual([
+      'a',
+      'b',
+      'c',
+      'd',
+      'inner-2.0',
+      'inner-2.1',
+    ]);
+  });
+
+  it('numbers copies so a deleted one never comes back', () => {
+    const base = document();
+    const first = duplicateInTree(base, EMPTY_TREE_EDIT, ['a'])!;
+    const removed = removeFromTree(first.edit, ['a-2'])!;
+    const second = duplicateInTree(applyTreeEdit(base, removed), removed, ['a'])!;
+    expect(second.copyIds).toEqual(['a-3']);
+  });
+
+  it('duplicates a copy of a copy', () => {
+    const base = document();
+    const first = duplicateInTree(base, EMPTY_TREE_EDIT, ['a'])!;
+    const second = duplicateInTree(applyTreeEdit(base, first.edit), first.edit, ['a-2'])!;
+    expect(second.copyIds).toEqual(['a-2-2']);
+    const edited = applyTreeEdit(base, second.edit);
+    expect(childIds(edited, 'top')).toEqual(['a', 'a-2', 'a-2-2', 'b', 'inner']);
   });
 });
 

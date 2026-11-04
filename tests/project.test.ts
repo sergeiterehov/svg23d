@@ -38,6 +38,7 @@ describe('project file', () => {
       groups: ['group-1'],
       removed: ['b'],
       unions: ['group-1'],
+      copies: [{ id: 'a-2', sourceId: 'a', parentId: 'inner' }],
     };
     const file = parseProjectFile(serializeProject({ ...project, tree }));
     expect(file.tree).toEqual(tree);
@@ -48,7 +49,14 @@ describe('project file', () => {
     const raw = JSON.parse(serializeProject(project)) as Record<string, unknown>;
     delete raw.tree;
     const file = parseProjectFile(JSON.stringify(raw));
-    expect(file.tree).toEqual({ names: {}, parents: {}, groups: [], removed: [], unions: [] });
+    expect(file.tree).toEqual({
+      names: {},
+      parents: {},
+      groups: [],
+      removed: [],
+      unions: [],
+      copies: [],
+    });
   });
 
   it('round-trips source, settings and globals', () => {

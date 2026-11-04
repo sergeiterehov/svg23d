@@ -87,6 +87,7 @@ function mergeTree(raw: Partial<TreeEdit> | undefined): TreeEdit {
     groups: raw?.groups ?? [],
     removed: raw?.removed ?? [],
     unions: raw?.unions ?? [],
+    copies: raw?.copies ?? [],
   };
 }
 

@@ -42,7 +42,7 @@ import {
   createEmptyProject,
   isEmptyDocument,
 } from '@core/model/empty';
-import { constrainGlobalPatch, constrainNodePatch } from '@core/model/limits';
+import { constrainGlobalPatch, constrainNodePatch, MIN_HEIGHT_MM } from '@core/model/limits';
 import { resolveLeaves, type PartInfo } from '@core/solver/resolveLeaves';
 import { findNode } from '@core/solver/resolveLeaves';
 import { findPartRoots } from '@core/solver/resolveLeaves';
@@ -53,6 +53,7 @@ import {
   applyTreeEdit,
   orderKeyFor,
   createGroup,
+  duplicateInTree,
   markUnions,
   ungroupInTree,
   moveNodesInTree,
@@ -217,6 +218,8 @@ interface AppState {
   moveNodes: (nodeIds: string[], targetId: string, position: 'before' | 'after' | 'inside') => void;
   /** Deletes the selected elements and their subtrees. */
   removeSelected: () => void;
+  /** Copies the selected elements right above the originals (⌘D) and selects the copies. */
+  duplicateSelected: () => void;
   /** Stacks the parts on top of each other; the dialog passes its own numbers (ADR-0033). */
   distributeZ: (options?: DistributeOptions) => void;
   /** Colours actually used by the model, each with the area it covers in mm² (ADR-0024). */
@@ -651,6 +654,95 @@ export const useProjectStore = create<AppState>()((set, get) => ({
     scheduleRebuild(set, get, 0);
   },
 
+  duplicateSelected: () => {
+    const { project, selectedIds } = get();
+    if (!project || selectedIds.length === 0) return;
+    const result = duplicateInTree(project.document, project.tree, selectedIds);
+    if (!result) return;
+
+    const settings = { ...project.settings };
+    // A copy is one more layer: it goes on top of its source by its own thickness. An exact copy in the
+    // same Z would only cut the original away (both bodies would be fully covered by each other).
+    const deltas = new Map<string, number>();
+    for (const copy of result.copies) {
+      const source = effectiveSettingsFor(
+        project.document.root,
+        project.settings,
+        project.global,
+        copy.sourceId,
+      );
+      if (!source) continue;
+      deltas.set(copy.id, Math.max(MIN_HEIGHT_MM, source.zTo - source.zFrom));
+    }
+
+    // Everything of the source travels to the copy: overrides, the union child order (rewritten to the
+    // new ids) and the explicit heights, shifted by the same delta.
+    for (const [sourceId, copyId] of Object.entries(result.idMap)) {
+      const own = project.settings[sourceId];
+      const copyRoot = result.copies.find((copy) => copyId === copy.id);
+      const rootId = copyRoot
+        ? copyRoot.id
+        : result.copies.find((c) => copyId.startsWith(`${c.id}.`))?.id;
+      const delta = rootId ? (deltas.get(rootId) ?? 0) : 0;
+      const childOrder = own?.childOrder?.map((id) => result.idMap[id] ?? id);
+
+      if (copyRoot) {
+        // The copy root gets an explicit band, so children that inherit their heights move with it.
+        const source = effectiveSettingsFor(
+          project.document.root,
+          project.settings,
+          project.global,
+          sourceId,
+        );
+        settings[copyId] = {
+          ...(own ?? {}),
+          ...(childOrder ? { childOrder } : {}),
+          zFrom: roundToStep(source?.zTo ?? 0),
+          zTo: roundToStep((source?.zTo ?? 0) + delta),
+        };
+        continue;
+      }
+      if (!own) continue;
+      const next: NodeSettings = { ...own };
+      if (childOrder) next.childOrder = childOrder;
+      if (own.zFrom !== undefined) next.zFrom = roundToStep(own.zFrom + delta);
+      if (own.zTo !== undefined) next.zTo = roundToStep(own.zTo + delta);
+      settings[copyId] = next;
+    }
+
+    // Paint order: the copy goes right above its source, in every parent that received one.
+    const orders: Record<string, string[]> = {};
+    for (const copy of result.copies) {
+      const parent =
+        copy.parentId === ''
+          ? project.document.root
+          : findNode(project.document.root, copy.parentId);
+      if (!parent) continue;
+      const key = orderKeyFor(project.document, copy.parentId);
+      const current = orders[key] ?? orderedChildren(parent, project.settings).map((c) => c.id);
+      const at = current.indexOf(copy.sourceId);
+      const next = [...current];
+      next.splice(at < 0 ? next.length : at + 1, 0, copy.id);
+      orders[key] = next;
+    }
+    for (const [key, childOrder] of Object.entries(orders)) {
+      settings[key] = { ...(settings[key] ?? {}), childOrder };
+    }
+
+    pushHistory(set, get, 'duplicate');
+    set({
+      project: {
+        ...project,
+        tree: result.edit,
+        document: applyTreeEdit(get().baseDocument, result.edit),
+        settings,
+      },
+      selectedIds: result.copyIds,
+      hoveredId: null,
+    });
+    scheduleRebuild(set, get, 0);
+  },
+
   loadExample: (id) => {
     const example = EXAMPLES[id];
     get().importSvg(example.source, example.fileName);
@@ -902,16 +994,18 @@ interface OpenStateInput {
 
 /** Everything a freshly opened project replaces in the store (ADR-0031). */
 function projectStateFrom(input: OpenStateInput): Partial<AppState> {
+  // Stored projects may be older than the overlay itself: fill in the fields they did not have yet.
+  const tree: TreeEdit = { ...EMPTY_TREE_EDIT, ...input.tree };
   const base = input.source.trim()
     ? parseSvg(input.source, { fileName: input.fileName, global: input.global })
     : createEmptyDocument(input.fileName);
-  const document = applyTreeEdit(base, input.tree);
+  const document = applyTreeEdit(base, tree);
   const project: Project = {
     version: PROJECT_VERSION,
     fileName: input.fileName,
     source: input.source,
     document,
-    tree: input.tree,
+    tree,
     settings: input.settings,
     global: input.global,
   };

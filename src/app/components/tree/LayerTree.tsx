@@ -6,6 +6,7 @@ import { orderedChildren } from '@core/solver/order';
 import { findNode } from '@core/solver/resolveLeaves';
 import { useProjectStore } from '../../store/useProjectStore';
 import {
+  DuplicateIcon,
   EyeIcon,
   EyeOffIcon,
   FolderIcon,
@@ -156,6 +157,7 @@ function TreeContextMenu({
   const unionSelected = useProjectStore((s) => s.unionSelected);
   const ununionSelected = useProjectStore((s) => s.ununionSelected);
   const ungroupSelected = useProjectStore((s) => s.ungroupSelected);
+  const duplicateSelected = useProjectStore((s) => s.duplicateSelected);
   const removeSelected = useProjectStore((s) => s.removeSelected);
   const selectedIds = useProjectStore((s) => s.selectedIds);
   const project = useProjectStore((s) => s.project);
@@ -255,6 +257,17 @@ function TreeContextMenu({
         icon={<RenameIcon className="h-3.5 w-3.5" />}
         label="Переименовать"
         onClick={onRename}
+      />
+      <MenuItem
+        icon={<DuplicateIcon className="h-3.5 w-3.5" />}
+        label={`Дублировать${count > 1 ? ` (${count})` : ''}`}
+        shortcut="⌘D"
+        disabled={count === 0}
+        title="Копия встаёт над оригиналом и сразу выделяется"
+        onClick={() => {
+          duplicateSelected();
+          onClose();
+        }}
       />
       <div className="my-1 border-t border-slate-800" />
       <MenuItem
