@@ -4,6 +4,7 @@ import { useProjectStore } from '../../store/useProjectStore';
 import type { ViewSettings } from '@core/model/types';
 import { SelectField } from '../common/Select';
 import { SlidersIcon, XIcon } from '../common/Icon';
+import { IconButton } from '../common/IconButton';
 
 /**
  * View settings live next to the 2D/3D switch: they belong to the preview, not to the project
@@ -36,21 +37,19 @@ export function ViewSettingsPopover() {
 
   return (
     <div ref={containerRef} className="relative">
-      <button
-        type="button"
-        title="Настройки вида"
-        aria-label="Настройки вида"
-        aria-expanded={open}
+      <IconButton
+        label="Настройки вида"
         onClick={() => setOpen((value) => !value)}
+        active={open}
         className={clsx(
-          'grid h-[30px] w-[30px] place-items-center rounded-md border transition',
+          'h-[30px] w-[30px] rounded-md border',
           open
             ? 'border-sky-500 bg-sky-600 text-white'
             : 'border-slate-700 bg-slate-900/90 text-slate-400 hover:border-slate-500 hover:text-slate-100',
         )}
       >
         <SlidersIcon className="h-4 w-4" />
-      </button>
+      </IconButton>
 
       {open && (
         <div className="absolute right-0 top-full z-30 mt-2 w-64 rounded-lg border border-slate-700 bg-slate-900 p-3 shadow-2xl">
@@ -58,15 +57,13 @@ export function ViewSettingsPopover() {
             <h3 className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
               Вид
             </h3>
-            <button
-              type="button"
-              title="Закрыть"
-              aria-label="Закрыть"
+            <IconButton
+              label="Закрыть"
               onClick={() => setOpen(false)}
-              className="grid h-5 w-5 place-items-center rounded text-slate-400 hover:bg-slate-800 hover:text-white"
+              className="h-5 w-5 hover:bg-slate-800 hover:text-white"
             >
               <XIcon className="h-3.5 w-3.5" />
-            </button>
+            </IconButton>
           </div>
 
           <div className="mt-2 space-y-2">

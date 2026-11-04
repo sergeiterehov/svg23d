@@ -6,6 +6,7 @@ import { orderedChildren } from '@core/solver/order';
 import { useProjectStore } from '../../store/useProjectStore';
 import { ColorChip } from '../common/Toggle';
 import { ChevronDownIcon, ChevronUpIcon, EyeIcon, EyeOffIcon } from '../common/Icon';
+import { IconButton } from '../common/IconButton';
 
 export function LayerTree() {
   const project = useProjectStore((s) => s.project);
@@ -86,58 +87,43 @@ function TreeRow({ node, depth }: { node: SvgDocNode; depth: number }) {
 
         <span className="flex shrink-0 items-center opacity-0 transition group-hover:opacity-100">
           <IconButton
-            title="Выше в порядке вырезания"
+            label="Выше в порядке вырезания"
+            stopPropagation
             onClick={() => shiftNode(node.id, 1)}
+            className="h-4 w-4 text-slate-500 hover:bg-slate-700/70 hover:text-slate-100"
           >
             <ChevronUpIcon className="h-3 w-3" />
           </IconButton>
-          <IconButton title="Ниже в порядке вырезания" onClick={() => shiftNode(node.id, -1)}>
+          <IconButton
+            label="Ниже в порядке вырезания"
+            stopPropagation
+            onClick={() => shiftNode(node.id, -1)}
+            className="h-4 w-4 text-slate-500 hover:bg-slate-700/70 hover:text-slate-100"
+          >
             <ChevronDownIcon className="h-3 w-3" />
           </IconButton>
         </span>
 
         <IconButton
-          title={effective?.hidden ? 'Показать' : 'Скрыть'}
-          persistent={effective?.hidden === true}
+          label={effective?.hidden ? 'Показать' : 'Скрыть'}
+          stopPropagation
           onClick={() => updateSettings(node.id, { hidden: !effective?.hidden })}
+          className={clsx(
+            'h-4 w-4 text-slate-500 hover:bg-slate-700/70 hover:text-slate-100',
+            effective?.hidden !== true && 'opacity-0 group-hover:opacity-100',
+          )}
         >
-          {effective?.hidden ? <EyeOffIcon className="h-3.5 w-3.5" /> : <EyeIcon className="h-3.5 w-3.5" />}
+          {effective?.hidden ? (
+            <EyeOffIcon className="h-3.5 w-3.5" />
+          ) : (
+            <EyeIcon className="h-3.5 w-3.5" />
+          )}
         </IconButton>
       </div>
 
       {expanded &&
         children.map((child) => <TreeRow key={child.id} node={child} depth={depth + 1} />)}
     </div>
-  );
-}
-
-function IconButton({
-  title,
-  onClick,
-  children,
-  persistent,
-}: {
-  title: string;
-  onClick: () => void;
-  children: React.ReactNode;
-  persistent?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      title={title}
-      aria-label={title}
-      onClick={(event) => {
-        event.stopPropagation();
-        onClick();
-      }}
-      className={clsx(
-        'grid h-4 w-4 place-items-center rounded text-slate-500 hover:bg-slate-700/70 hover:text-slate-100',
-        !persistent && 'opacity-0 group-hover:opacity-100',
-      )}
-    >
-      {children}
-    </button>
   );
 }
 
