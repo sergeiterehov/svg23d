@@ -4,15 +4,47 @@ import { useProjectStore } from '../../store/useProjectStore';
 import { DEFAULT_GLOBAL_SETTINGS } from '@core/model/defaults';
 import type { ViewSettings } from '@core/model/types';
 import { SelectField } from '../common/Select';
-import { SlidersIcon, XIcon } from '../common/Icon';
+import { FieldSection } from '../common/Field';
+import {
+  BlendIcon,
+  HeightsIcon,
+  PictureIcon,
+  ProjectionOrthoIcon,
+  ProjectionPerspectiveIcon,
+  SlidersIcon,
+  SphereIcon,
+  SunIcon,
+  XIcon,
+} from '../common/Icon';
 import { IconButton } from '../common/IconButton';
+import { useTooltip } from '../common/Tooltip';
+
+interface TabOption<T extends string> {
+  value: T;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+}
+
+const MODES_2D: ReadonlyArray<TabOption<ViewSettings['mode2d']>> = [
+  { value: 'transparent', label: 'Полупрозрачный', icon: BlendIcon },
+  { value: 'heightmap', label: 'Карта высот', icon: HeightsIcon },
+  { value: 'asis', label: 'Как есть', icon: PictureIcon },
+];
+
+const PROJECTIONS: ReadonlyArray<TabOption<ViewSettings['projection']>> = [
+  { value: 'perspective', label: 'Перспективная', icon: ProjectionPerspectiveIcon },
+  { value: 'orthographic', label: 'Ортогональная', icon: ProjectionOrthoIcon },
+];
 
 /**
  * View settings live next to the 2D/3D switch: they belong to the preview, not to the project
- * settings panel. The popover closes with its own ✕ (and on Escape / outside click).
+ * settings panel. The popover opens upwards (the switch sits at the bottom of the canvas) and shows
+ * only the settings that matter for the current mode. The popover closes with its own ✕ (and on
+ * Escape / outside click).
  */
 export function ViewSettingsPopover() {
   const view = useProjectStore((s) => s.project?.global.view) ?? DEFAULT_GLOBAL_SETTINGS.view;
+  const viewMode = useProjectStore((s) => s.viewMode);
   const updateView = useProjectStore((s) => s.updateView);
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -50,8 +82,8 @@ export function ViewSettingsPopover() {
       </IconButton>
 
       {open && (
-        <div className="absolute right-0 top-full z-30 mt-2 w-64 rounded-lg border border-slate-700 bg-slate-900 p-3 shadow-2xl">
-          <div className="flex items-center justify-between">
+        <div className="absolute bottom-full right-0 z-30 mb-2 w-64 overflow-hidden rounded-lg border border-slate-700 bg-slate-900 shadow-2xl">
+          <div className="flex items-center justify-between px-3 py-2.5">
             <h3 className="text-[11px] font-semibold text-slate-200">Вид</h3>
             <IconButton
               label="Закрыть"
@@ -62,51 +94,122 @@ export function ViewSettingsPopover() {
             </IconButton>
           </div>
 
-          <div className="mt-2 space-y-2">
-            <SelectField
-              label="Режим 2D"
-              value={view.mode2d}
-              options={[
-                { value: 'transparent', label: 'Полупрозрачный' },
-                { value: 'heightmap', label: 'Карта высот' },
-                { value: 'asis', label: 'Как есть' },
-              ]}
-              onChange={(value) => updateView({ mode2d: value as ViewSettings['mode2d'] })}
-            />
+          {viewMode === '3d' ? (
+            <>
+              <FieldSection
+                title="Проекция"
+                hint="Перспектива даёт естественную глубину, ортогональная — параллельные рёбра, как в CAD."
+              >
+                <IconTabs
+                  value={view.projection}
+                  options={PROJECTIONS}
+                  onChange={(value) => updateView({ projection: value })}
+                />
+              </FieldSection>
 
-            <SelectField
-              label="Освещение"
-              value={view.lighting}
-              options={[
-                { value: 'studio', label: 'Студийное' },
-                { value: 'top', label: 'Сверху' },
-                { value: 'flat', label: 'Плоское' },
-              ]}
-              onChange={(value) => updateView({ lighting: value as ViewSettings['lighting'] })}
-            />
+              <FieldSection title="Освещение">
+                <SelectField
+                  label="Освещение"
+                  icon={SunIcon}
+                  value={view.lighting}
+                  options={[
+                    { value: 'studio', label: 'Студийное' },
+                    { value: 'top', label: 'Сверху' },
+                    { value: 'flat', label: 'Плоское' },
+                  ]}
+                  onChange={(value) => updateView({ lighting: value as ViewSettings['lighting'] })}
+                />
+              </FieldSection>
 
-            <SelectField
-              label="Материал"
-              value={view.material}
-              options={[
-                { value: 'matte', label: 'Матовый' },
-                { value: 'glossy', label: 'Глянцевый' },
-              ]}
-              onChange={(value) => updateView({ material: value as ViewSettings['material'] })}
-            />
-
-            <SelectField
-              label="Проекция"
-              value={view.projection}
-              options={[
-                { value: 'perspective', label: 'Перспективная' },
-                { value: 'orthographic', label: 'Ортогональная' },
-              ]}
-              onChange={(value) => updateView({ projection: value as ViewSettings['projection'] })}
-            />
-          </div>
+              <FieldSection title="Материал">
+                <SelectField
+                  label="Материал"
+                  icon={SphereIcon}
+                  value={view.material}
+                  options={[
+                    { value: 'matte', label: 'Матовый' },
+                    { value: 'glossy', label: 'Глянцевый' },
+                  ]}
+                  onChange={(value) => updateView({ material: value as ViewSettings['material'] })}
+                />
+              </FieldSection>
+            </>
+          ) : (
+            <FieldSection
+              title="Режим 2D"
+              hint="Полупрозрачный показывает наложение слоёв, карта высот красит по глубине, «как есть» — исходные цвета SVG."
+            >
+              <IconTabs
+                value={view.mode2d}
+                options={MODES_2D}
+                onChange={(value) => updateView({ mode2d: value })}
+              />
+            </FieldSection>
+          )}
         </div>
       )}
     </div>
+  );
+}
+
+/** Segmented control of icon-only tabs; the name comes up as a delayed tooltip. */
+function IconTabs<T extends string>({
+  value,
+  options,
+  onChange,
+}: {
+  value: T;
+  options: ReadonlyArray<TabOption<T>>;
+  onChange: (value: T) => void;
+}) {
+  return (
+    // One track for the whole group, filled like any field and without a border: the active tab is
+    // the only thing that gets a fill of its own.
+    <div role="group" className="flex overflow-hidden rounded-md bg-slate-800/60">
+      {options.map((option) => (
+        <TabButton
+          key={option.value}
+          label={option.label}
+          icon={option.icon}
+          active={option.value === value}
+          onClick={() => onChange(option.value)}
+        />
+      ))}
+    </div>
+  );
+}
+
+function TabButton({
+  label,
+  icon: Icon,
+  active,
+  onClick,
+}: {
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  active: boolean;
+  onClick: () => void;
+}) {
+  const tip = useTooltip(label);
+
+  return (
+    <>
+      <button
+        type="button"
+        aria-label={label}
+        aria-pressed={active}
+        onClick={onClick}
+        {...tip.handlers}
+        className={clsx(
+          'grid h-7 flex-1 place-items-center transition',
+          active
+            ? 'bg-sky-600 text-white'
+            : 'text-slate-400 hover:bg-slate-700/60 hover:text-slate-100',
+        )}
+      >
+        <Icon className="h-4 w-4" />
+      </button>
+      {tip.tooltip}
+    </>
   );
 }

@@ -191,6 +191,81 @@ export function HeightToIcon({ className }: IconProps) {
   );
 }
 
+/*
+ * View settings. The same idea as the field prefixes: a setting is recognised by its icon.
+ */
+
+/** 2D "полупрозрачный": a square and a circle showing through each other. */
+export function BlendIcon({ className }: IconProps) {
+  return (
+    <Svg className={className}>
+      <rect x="3" y="8" width="11" height="11" rx="1.5" />
+      <circle cx="15.5" cy="8.5" r="4.5" />
+    </Svg>
+  );
+}
+
+/** 2D "карта высот": a broken line over an axis. */
+export function HeightsIcon({ className }: IconProps) {
+  return (
+    <Svg className={className}>
+      <path d="M3.5 20h17" />
+      <path d="m4.5 16 4-6 4 3.5 3-6 4.5 4" />
+    </Svg>
+  );
+}
+
+/** 2D "как есть": a picture with a sun and mountains. */
+export function PictureIcon({ className }: IconProps) {
+  return (
+    <Svg className={className}>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <circle cx="8.5" cy="9.5" r="1.5" />
+      <path d="m4 18 5-5 3.5 3.5 3-2.5 4.5 4" />
+    </Svg>
+  );
+}
+
+/** Perspective projection: the outline of a cube whose near face is wider than the far one. */
+export function ProjectionPerspectiveIcon({ className }: IconProps) {
+  return (
+    <Svg className={className}>
+      <path d="M7 4h10l4 16H3z" />
+    </Svg>
+  );
+}
+
+/** Orthographic projection: an isometric cube with parallel edges. */
+export function ProjectionOrthoIcon({ className }: IconProps) {
+  return (
+    <Svg className={className}>
+      <path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z" />
+      <path d="m4 7.5 8 4.5 8-4.5" />
+      <path d="M12 12v9" />
+    </Svg>
+  );
+}
+
+/** Lighting preset. */
+export function SunIcon({ className }: IconProps) {
+  return (
+    <Svg className={className}>
+      <circle cx="12" cy="12" r="3.5" />
+      <path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.2 5.2l1.4 1.4M17.4 17.4l1.4 1.4M18.8 5.2l-1.4 1.4M6.6 17.4l-1.4 1.4" />
+    </Svg>
+  );
+}
+
+/** Surface finish: a ball with a highlight. */
+export function SphereIcon({ className }: IconProps) {
+  return (
+    <Svg className={className}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M8 9a5.5 5.5 0 0 1 4.5-3" />
+    </Svg>
+  );
+}
+
 /** A corner cut off on the upper face: the wall rises, slants and turns into the top edge. */
 export function ChamferTopIcon({ className }: IconProps) {
   return (

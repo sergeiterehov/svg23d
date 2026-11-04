@@ -132,7 +132,10 @@ export default function App() {
         </aside>
 
         <main className="relative min-w-0 flex-1 bg-slate-900">
-          <div className="absolute right-3 top-3 z-20 flex items-center gap-2">
+          <div className="h-full w-full">{viewMode === '3d' ? <Preview3D /> : <Preview2D />}</div>
+
+          {/* Bottom-right: the navigation cube sits above this row (see Preview3D). */}
+          <div className="absolute bottom-3 right-3 z-20 flex items-center gap-2">
             <div className="flex overflow-hidden rounded-md border border-slate-700 bg-slate-900/90 text-xs">
               {(['2d', '3d'] as const).map((mode) => (
                 <button
@@ -152,8 +155,6 @@ export default function App() {
             </div>
             <ViewSettingsPopover />
           </div>
-
-          <div className="h-full w-full">{viewMode === '3d' ? <Preview3D /> : <Preview2D />}</div>
         </main>
 
         <aside className="w-80 shrink-0 border-l border-slate-800 bg-slate-950">

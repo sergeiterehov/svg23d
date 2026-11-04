@@ -12,12 +12,12 @@ import {
 } from '@core/model/limits';
 import { NumberField } from '../common/NumberField';
 import { ColorChip, MixedColorChip, Toggle } from '../common/Toggle';
+import { FieldSection } from '../common/Field';
 import {
   ChamferBottomIcon,
   ChamferTopIcon,
   ClearanceIcon,
   CurveIcon,
-  HelpHint,
   HeightFromIcon,
   HeightToIcon,
   ResetIcon,
@@ -54,32 +54,6 @@ export function Inspector() {
       )}
       <StatsPanel />
     </div>
-  );
-}
-
-/** One block of related fields: caption on the left, optional actions on the right. */
-function Section({
-  title,
-  hint,
-  right,
-  children,
-}: {
-  title: string;
-  hint?: string;
-  right?: React.ReactNode;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="border-b border-slate-800/70 px-3 py-2.5">
-      <div className="flex min-h-4 items-center justify-between gap-2">
-        <h2 className="flex min-w-0 items-center gap-1 text-[11px] font-semibold text-slate-200">
-          <span className="truncate">{title}</span>
-          {hint && <HelpHint text={hint} />}
-        </h2>
-        {right}
-      </div>
-      <div className="mt-1.5 space-y-1.5">{children}</div>
-    </section>
   );
 }
 
@@ -122,7 +96,7 @@ function ElementPanel({ node }: { node: SvgDocNode }) {
 
   return (
     <>
-      <Section title="Элемент" right={<BackToProject />}>
+      <FieldSection title="Элемент" right={<BackToProject />}>
         <div className="flex items-center gap-2">
           <ColorChip color={node.fill} size={14} />
           <div className="min-w-0">
@@ -159,13 +133,13 @@ function ElementPanel({ node }: { node: SvgDocNode }) {
             </button>
           </p>
         )}
-      </Section>
+      </FieldSection>
 
       {unionParent && <UnionPartSections node={node} unionParent={unionParent} />}
 
       {!unionParent && (
         <>
-          <Section
+          <FieldSection
             title="Высота"
             hint="Нижняя и верхняя граница выдавливания. «До» не может быть ниже «от»."
           >
@@ -200,9 +174,9 @@ function ElementPanel({ node }: { node: SvgDocNode }) {
                 «До» меньше «от» — элемент не будет напечатан.
               </p>
             )}
-          </Section>
+          </FieldSection>
 
-          <Section
+          <FieldSection
             title="Фаска"
             hint="Снятие под 45° на верхней и нижней грани; не больше половины высоты элемента."
           >
@@ -240,9 +214,9 @@ function ElementPanel({ node }: { node: SvgDocNode }) {
                 }
               />
             </Pair>
-          </Section>
+          </FieldSection>
 
-          <Section
+          <FieldSection
             title="Гнёзда"
             hint="Зазор на сторону: отверстие под этот элемент будет больше на 2× значения. Гнездо вырезается в деталях, которые лежат ниже."
           >
@@ -270,9 +244,9 @@ function ElementPanel({ node }: { node: SvgDocNode }) {
               }
               hint="Верхние элементы будут вырезать гнёзда в этой детали"
             />
-          </Section>
+          </FieldSection>
 
-          <Section title="Вид">
+          <FieldSection title="Вид">
             <ColorField
               value={own.colorOverride ?? (node.union ? unionFill(node) : colourOf(node))}
               // A group has no colour of its own: its children bring their own, so "none" is the default.
@@ -303,7 +277,7 @@ function ElementPanel({ node }: { node: SvgDocNode }) {
                 updateSettings(node.id, { hidden: checked ? true : undefined })
               }
             />
-          </Section>
+          </FieldSection>
         </>
       )}
     </>
@@ -327,7 +301,7 @@ function UnionPartSections({ node, unionParent }: { node: SvgDocNode; unionParen
   );
 
   return (
-    <Section
+    <FieldSection
       title={`Часть объединения «${unionParent.name}»`}
       hint="Высоты, фаска, допуск и цвет задаются у самого объединения: части сливаются в одно тело до выдавливания."
     >
@@ -338,7 +312,7 @@ function UnionPartSections({ node, unionParent }: { node: SvgDocNode; unionParen
         hint="Скрытая часть не входит в объединение — например, чтобы убрать обводку"
         onChange={(checked) => updateSettings(node.id, { hidden: checked ? true : undefined })}
       />
-    </Section>
+    </FieldSection>
   );
 }
 
@@ -411,7 +385,7 @@ function MultiPanel({ nodes }: { nodes: SvgDocNode[] }) {
   // Every selected node is a part of a union: nothing here can reach the model.
   if (unionParents.every((parent) => parent !== null)) {
     return (
-      <Section title={`Выбрано: ${nodes.length}`} right={<BackToProject />}>
+      <FieldSection title={`Выбрано: ${nodes.length}`} right={<BackToProject />}>
         <p className="truncate text-[11px] text-slate-500">
           {namesText}
           {nodes.length > 4 ? ` и ещё ${nodes.length - 4}` : ''}
@@ -420,13 +394,13 @@ function MultiPanel({ nodes }: { nodes: SvgDocNode[] }) {
           Это части объединений: каждая печатается в составе своего тела, поэтому высоты, фаска и
           допуск задаются у самого объединения. Скрыть часть по отдельности можно в дереве.
         </p>
-      </Section>
+      </FieldSection>
     );
   }
 
   return (
     <>
-      <Section
+      <FieldSection
         title={`Выбрано: ${nodes.length}`}
         hint="⌘/Ctrl-клик по дереву добавляет элемент к выбору. Пустое поле с разбросом вроде «12-15» значит разные значения."
         right={<BackToProject />}
@@ -440,9 +414,9 @@ function MultiPanel({ nodes }: { nodes: SvgDocNode[] }) {
             Части объединений в выборке: их личные настройки не действуют.
           </p>
         )}
-      </Section>
+      </FieldSection>
 
-      <Section title="Высота" hint="Применяется ко всем выбранным элементам.">
+      <FieldSection title="Высота" hint="Применяется ко всем выбранным элементам.">
         <Pair>
           <NumberField
             label="Высота от"
@@ -471,9 +445,9 @@ function MultiPanel({ nodes }: { nodes: SvgDocNode[] }) {
             У части элементов «до» меньше «от» — они не будут напечатаны.
           </p>
         )}
-      </Section>
+      </FieldSection>
 
-      <Section
+      <FieldSection
         title="Фаска"
         hint="Снятие под 45° на верхней и нижней грани (не больше половины высоты элемента)."
       >
@@ -499,9 +473,12 @@ function MultiPanel({ nodes }: { nodes: SvgDocNode[] }) {
             onDelta={(delta) => chamferBottom.delta(delta, 0)}
           />
         </Pair>
-      </Section>
+      </FieldSection>
 
-      <Section title="Гнёзда" hint="Зазор на сторону в гнёздах, которые эти элементы вырезают.">
+      <FieldSection
+        title="Гнёзда"
+        hint="Зазор на сторону в гнёздах, которые эти элементы вырезают."
+      >
         <NumberField
           label="Допуск"
           icon={ClearanceIcon}
@@ -520,9 +497,9 @@ function MultiPanel({ nodes }: { nodes: SvgDocNode[] }) {
           onChange={(checked) => setFlags('isPart', checked)}
           hint="Применяется ко всем выбранным элементам"
         />
-      </Section>
+      </FieldSection>
 
-      <Section title="Вид">
+      <FieldSection title="Вид">
         <ColorField
           value={colors[0]}
           mixed={!colorsEqual}
@@ -549,7 +526,7 @@ function MultiPanel({ nodes }: { nodes: SvgDocNode[] }) {
           mixed={hidden.mixed}
           onChange={(checked) => setFlags('hidden', checked)}
         />
-      </Section>
+      </FieldSection>
     </>
   );
 }
@@ -625,13 +602,13 @@ function ProjectPanel() {
 
   return (
     <>
-      <Section title="Настройки проекта">
+      <FieldSection title="Настройки проекта">
         <p className="text-[10px] leading-snug text-slate-500">
           Значения по умолчанию для всех элементов
         </p>
-      </Section>
+      </FieldSection>
 
-      <Section
+      <FieldSection
         title="Размер"
         hint="Ширина, высота или бо́льшая сторона модели в мм; пропорции сохраняются."
       >
@@ -661,9 +638,9 @@ function ProjectPanel() {
             onChange={(value) => updateGlobal({ fit: value as 'width' | 'height' | 'max' })}
           />
         </Pair>
-      </Section>
+      </FieldSection>
 
-      <Section title="Высота" hint="Границы выдавливания по умолчанию, мм.">
+      <FieldSection title="Высота" hint="Границы выдавливания по умолчанию, мм.">
         <Pair>
           <NumberField
             label="Высота от"
@@ -684,9 +661,9 @@ function ProjectPanel() {
             onDelta={(delta) => updateGlobal({ defaultZTo: round(global.defaultZTo + delta) })}
           />
         </Pair>
-      </Section>
+      </FieldSection>
 
-      <Section title="Фаска" hint="Снятие под 45° на верхней и нижней грани по умолчанию.">
+      <FieldSection title="Фаска" hint="Снятие под 45° на верхней и нижней грани по умолчанию.">
         <Pair>
           <NumberField
             label="Фаска сверху"
@@ -717,9 +694,9 @@ function ProjectPanel() {
             }
           />
         </Pair>
-      </Section>
+      </FieldSection>
 
-      <Section title="Допуск" hint="Зазор на сторону в гнёздах между соседними деталями.">
+      <FieldSection title="Допуск" hint="Зазор на сторону в гнёздах между соседними деталями.">
         <NumberField
           label="Допуск"
           icon={ClearanceIcon}
@@ -732,9 +709,9 @@ function ProjectPanel() {
             updateGlobal({ defaultClearance: Math.max(0, round(global.defaultClearance + delta)) })
           }
         />
-      </Section>
+      </FieldSection>
 
-      <Section
+      <FieldSection
         title="Качество кривых"
         hint="Допуск спрямления кривых: точнее — больше треугольников и медленнее расчёт"
       >
@@ -750,7 +727,7 @@ function ProjectPanel() {
           ]}
           onChange={(value) => updateGlobal({ flatness: Number(value) })}
         />
-      </Section>
+      </FieldSection>
 
       <p className="px-3 py-3 text-[10px] leading-snug text-slate-500">
         Чтобы настроить конкретный элемент, выберите его в дереве слева.

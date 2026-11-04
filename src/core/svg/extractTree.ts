@@ -17,7 +17,13 @@ import {
   parseTransform,
   type Matrix,
 } from './transforms';
-import { resolveElementStyle, parseCssRules, type CssRule, type StyleState, ROOT_STYLE } from './styles';
+import {
+  resolveElementStyle,
+  parseCssRules,
+  type CssRule,
+  type StyleState,
+  ROOT_STYLE,
+} from './styles';
 import { userUnitTolerance, type UnitMapping } from './units';
 
 /**
@@ -348,13 +354,7 @@ function relativeLuminance(color: string): number {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
-function rectContour(
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-  matrix: Matrix,
-): Contour {
+function rectContour(x: number, y: number, width: number, height: number, matrix: Matrix): Contour {
   const points = [
     { x, y },
     { x: x + width, y },
@@ -460,7 +460,8 @@ function buildShapeNodes(
     fillShape.name = `${build.name} · заливка`;
     nodes.push({
       id: build.id,
-      tag,
+      // A union is a group: the tree and the inspector show it like one.
+      tag: 'g',
       kind: 'group',
       name: build.name,
       fill: style.fill,
@@ -514,7 +515,13 @@ function resolveUse(
     element.getAttribute('xlink:href') ??
     '';
   if (!href.startsWith('#')) {
-    warn(context, element, 'unresolved-use', 'use ссылается на внешний документ — не поддерживается', build.id);
+    warn(
+      context,
+      element,
+      'unresolved-use',
+      'use ссылается на внешний документ — не поддерживается',
+      build.id,
+    );
     return [];
   }
   const target = context.idLookup.get(href.slice(1));

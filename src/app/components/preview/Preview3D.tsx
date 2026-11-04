@@ -174,7 +174,8 @@ export function Preview3D() {
   return (
     <div className="relative h-full w-full">
       <div ref={containerRef} className="h-full w-full" />
-      <div ref={navCubeRef} className="absolute bottom-3 right-3 z-10 h-[96px] w-[96px]" />
+      {/* Above the 2D/3D switch that sits at the bottom-right corner of the canvas. */}
+      <div ref={navCubeRef} className="absolute bottom-[52px] right-3 z-10 h-[96px] w-[96px]" />
     </div>
   );
 }

@@ -323,12 +323,9 @@ function TreeRow({ node, depth, ui, anchorRef, onDrop }: TreeRowProps) {
     project.global,
     node.id,
   );
-  // A part of a union shows the union's heights: its own would not reach the model.
-  const owner = node.union ? null : findUnionOwner(project.document.root, node.id);
-  const range =
-    owner === null
-      ? effective
-      : effectiveSettingsFor(project.document.root, project.settings, project.global, owner.id);
+  // A part of a union has no heights of its own and no meaningful range: the body is the union's.
+  const unionPart = node.union !== true && findUnionOwner(project.document.root, node.id) !== null;
+  const range = unionPart ? null : effective;
   const isSelected = selectedIds.includes(node.id);
   const isHovered = hoveredId === node.id;
   const isHidden = effective?.hidden === true;
@@ -441,7 +438,7 @@ function TreeRow({ node, depth, ui, anchorRef, onDrop }: TreeRowProps) {
         </button>
 
         {node.union ? (
-          // Merged body: the icon carries the object's colour, the shape says "not a container".
+          // Merged body: the icon carries the object's colour, the shape says "not just a container".
           <span
             className="grid shrink-0 place-items-center text-slate-400"
             style={unionColor ? { color: unionColor } : undefined}
