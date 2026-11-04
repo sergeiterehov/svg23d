@@ -119,23 +119,18 @@ export function EyeIcon({ className }: IconProps) {
   );
 }
 
-/** Wrench: half of the "tools" icon. The ring is drawn as an open arc so it does not read as a
- * magnifier at 12 px. */
-export function WrenchIcon({ className }: IconProps) {
+/** Wrench crossed with a hammer (like a hammer-and-sickle emblem): the layers tools menu. */
+export function ToolsIcon({ className }: IconProps) {
   return (
     <Svg className={className}>
-      <path d="M18.9 4.4a3.6 3.6 0 1 0 1.2 4.9" />
-      <path d="m15 11-10 10" />
-    </Svg>
-  );
-}
-
-/** Hammer: the second half of the "tools" icon. */
-export function HammerIcon({ className }: IconProps) {
-  return (
-    <Svg className={className}>
-      <path d="M5 4h9v5.5H5z" />
-      <path d="M9.5 9.5V21" />
+      {/* Hammer: head at the top-left, handle down to the bottom-right. */}
+      <g transform="rotate(-45 12 12)">
+        <path d="M7.5 3.5h6.5v5H7.5z" />
+        <path d="M10.75 8.5V21" />
+      </g>
+      {/* Wrench: jaw at the top-right, handle down to the bottom-left. */}
+      <path d="M18.6 4.7a3.5 3.5 0 1 0 1.1 4.8" />
+      <path d="m14.8 11-9.6 9.6" />
     </Svg>
   );
 }

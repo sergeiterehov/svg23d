@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useProjectStore } from '../../store/useProjectStore';
-import { HammerIcon, WrenchIcon } from '../common/Icon';
+import { ToolsIcon } from '../common/Icon';
 import { IconButton } from '../common/IconButton';
 import { LAYER_MM, SINK_MM } from '@core/solver/distribute';
 
@@ -42,10 +42,7 @@ export function LayerTools() {
             : 'h-6 w-6 text-slate-500 hover:bg-slate-800 hover:text-slate-100'
         }
       >
-        <span className="flex items-center gap-px">
-          <WrenchIcon className="h-3 w-3" />
-          <HammerIcon className="h-3 w-3" />
-        </span>
+        <ToolsIcon className="h-4 w-4" />
       </IconButton>
 
       {open && (
