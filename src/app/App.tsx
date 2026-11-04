@@ -8,6 +8,7 @@ import { LayerTree } from './components/tree/LayerTree';
 import { Preview2D } from './components/preview/Preview2D';
 import { Preview3D } from './components/preview/Preview3D';
 import { Inspector } from './components/inspector/Inspector';
+import { ViewSettingsPopover } from './components/preview/ViewSettingsPopover';
 import { HelpHint } from './components/common/Icon';
 
 export default function App() {
@@ -75,22 +76,25 @@ export default function App() {
         </aside>
 
         <main className="relative min-w-0 flex-1 bg-slate-900">
-          <div className="absolute right-3 top-3 z-10 flex overflow-hidden rounded-md border border-slate-700 bg-slate-900/90 text-xs">
-            {(['2d', '3d'] as const).map((mode) => (
-              <button
-                key={mode}
-                type="button"
-                onClick={() => setViewMode(mode)}
-                className={clsx(
-                  'px-3 py-1.5 uppercase tracking-wide transition',
-                  viewMode === mode
-                    ? 'bg-sky-600 text-white'
-                    : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200',
-                )}
-              >
-                {mode}
-              </button>
-            ))}
+          <div className="absolute right-3 top-3 z-20 flex items-center gap-2">
+            <div className="flex overflow-hidden rounded-md border border-slate-700 bg-slate-900/90 text-xs">
+              {(['2d', '3d'] as const).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => setViewMode(mode)}
+                  className={clsx(
+                    'px-3 py-1.5 uppercase tracking-wide transition',
+                    viewMode === mode
+                      ? 'bg-sky-600 text-white'
+                      : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200',
+                  )}
+                >
+                  {mode}
+                </button>
+              ))}
+            </div>
+            <ViewSettingsPopover />
           </div>
 
           <div className="h-full w-full">

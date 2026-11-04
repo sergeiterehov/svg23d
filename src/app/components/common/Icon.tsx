@@ -91,6 +91,25 @@ export function OpenIcon({ className }: IconProps) {
   );
 }
 
+/** Sliders: view/appearance settings. */
+export function SlidersIcon({ className }: IconProps) {
+  return (
+    <Svg className={className}>
+      <path d="M4 7h9M18 7h2M4 17h3M12 17h8" />
+      <circle cx="15.5" cy="7" r="2" />
+      <circle cx="9.5" cy="17" r="2" />
+    </Svg>
+  );
+}
+
+export function XIcon({ className }: IconProps) {
+  return (
+    <Svg className={className}>
+      <path d="M6 6l12 12M18 6 6 18" />
+    </Svg>
+  );
+}
+
 export function EyeIcon({ className }: IconProps) {
   return (
     <Svg className={className}>
@@ -110,8 +129,7 @@ export function EyeOffIcon({ className }: IconProps) {
   );
 }
 
-/**
- * Small "?" bubble with an instant custom popover (the native `title` tooltip has a long delay).
+/** Small "?" bubble with an instant custom popover (the native `title` tooltip has a long delay).
  * Rendered through a portal with fixed coordinates so it is never clipped by scrolling panels.
  */
 export function HelpHint({ text }: { text: string }) {

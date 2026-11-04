@@ -61,8 +61,9 @@ export function Preview2D() {
   const fillFor = (node: SvgDocNode): string => {
     if (mode !== 'heightmap') return node.fill === 'none' ? '#000000' : node.fill;
     const top = heightById.get(node.id);
-    if (top === undefined) return '#cbd5e1';
-    return heightColor((top - minHeight) / heightSpan);
+    if (top === undefined) return '#94a3b8';
+    // A model where every element has the same height is "all max".
+    return heightColor(heightSpan < 1e-6 ? 1 : (top - minHeight) / heightSpan);
   };
 
   const maskId = (index: number): string => `svg23d-mask-${index}`;
@@ -70,7 +71,7 @@ export function Preview2D() {
 
   return (
     <div
-      className="relative h-full w-full overflow-hidden bg-[#f8fafc]"
+      className="relative h-full w-full overflow-hidden bg-slate-800"
       onClick={(event) => {
         // Empty space around the artwork → deselect and show project settings.
         if (!(event.target as Element).closest('path')) select(null);
@@ -133,7 +134,7 @@ export function Preview2D() {
               fillRule={node.fillRule}
               mask={masked ? `url(#${maskId(index)})` : undefined}
               opacity={opacity}
-              stroke={active && simple ? '#0ea5e9' : simple ? '#0f172a' : 'none'}
+              stroke={active && simple ? '#38bdf8' : simple ? 'rgba(148, 163, 184, 0.45)' : 'none'}
               strokeWidth={active ? strokeActive : strokeNormal}
               strokeLinejoin="round"
               className="cursor-pointer transition-opacity"
@@ -145,7 +146,7 @@ export function Preview2D() {
       </svg>
 
       {mode === 'heightmap' && (
-        <div className="pointer-events-none absolute bottom-3 left-3 rounded-md border border-slate-700/60 bg-slate-900/85 px-2 py-1.5">
+        <div className="pointer-events-none absolute bottom-3 left-3 rounded-md border border-slate-600/70 bg-slate-900/85 px-2 py-1.5">
           <div className="h-1.5 w-32 rounded-full" style={{ background: HEIGHT_GRADIENT_CSS }} />
           <div className="mt-1 flex justify-between text-[10px] tabular-nums text-slate-300">
             <span>{round(minHeight)} мм</span>
