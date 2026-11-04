@@ -129,6 +129,43 @@ describe('assembly solver', () => {
     expect(removed).toBeLessThan(425);
   });
 
+  it('uses the clearance of the inserted (upper) element, not of the plate', () => {
+    const circle = (radius: number): Contour[] => [
+      Array.from({ length: 96 }, (_, index) => {
+        const angle = (index / 96) * Math.PI * 2;
+        return { x: 50 + radius * Math.cos(angle), y: 50 + radius * Math.sin(angle) };
+      }),
+    ];
+
+    const plate = makeLeaf({
+      id: 'plate',
+      partId: 'A',
+      order: 0,
+      zFrom: 0,
+      zTo: 2,
+      // The plate's own clearance must not influence the hole made by the pin.
+      clearance: 5,
+    });
+    const pin = makeLeaf({
+      id: 'pin',
+      partId: 'B',
+      order: 1,
+      zFrom: 0,
+      zTo: 2,
+      contours: circle(10),
+      clearance: 0.2,
+    });
+
+    const result = buildModel({ api, leaves: [plate, pin] });
+    const removed = 20000 - (result.parts.find((p) => p.partId === 'A')?.volume ?? 0);
+    // Hole radius = 10 + 0.2, height 2 mm → volume ≈ π · 10.2² · 2 ≈ 653.7 mm³
+    const expectedVolume = Math.PI * (10 + 0.2) ** 2 * 2;
+    expect(removed).toBeGreaterThan(expectedVolume * 0.97);
+    expect(removed).toBeLessThan(expectedVolume * 1.03);
+    // With the plate's own clearance (5 mm) the hole would be far larger.
+    expect(removed).toBeLessThan(Math.PI * (10 + 5) ** 2 * 2);
+  });
+
   it('does not cut inside a single part', () => {
     const a = makeLeaf({ id: 'a', partId: 'A', order: 0, zFrom: 0, zTo: 2 });
     const b = makeLeaf({ id: 'b', partId: 'A', order: 1, zFrom: 1, zTo: 3 });

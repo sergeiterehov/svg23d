@@ -99,7 +99,7 @@ function ElementPanel({ node }: { node: SvgDocNode }) {
               inheritedValue={effective.clearance}
               step={0.05}
               min={0}
-              hint="Зазор на сторону. Отверстие под элемент будет больше на 2× значения"
+              hint="Действует на гнёзда, которые этот элемент вырезает в деталях НИЖЕ. Зазор на сторону: отверстие будет больше на 2× значения"
               onChange={(value) => updateSettings(node.id, { clearance: value })}
             />
 
