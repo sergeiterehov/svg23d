@@ -39,13 +39,6 @@ export default function App() {
         (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
       const key = event.key.toLowerCase();
 
-      // ⌥⇧U (by physical key, so it works on any layout) — union the selection into one object.
-      if (event.altKey && event.shiftKey && event.code === 'KeyU' && !inField) {
-        event.preventDefault();
-        useProjectStore.getState().unionSelected();
-        return;
-      }
-
       if (!event.metaKey && !event.ctrlKey) {
         // Delete / ⌫ remove the selected elements (never while typing).
         if ((event.key === 'Delete' || event.key === 'Backspace') && !inField) {
@@ -74,6 +67,10 @@ export default function App() {
       } else if (key === 'g' && !inField) {
         event.preventDefault();
         useProjectStore.getState().groupSelected();
+      } else if (event.code === 'KeyU' && !inField) {
+        // ⌘U by physical key, so it works on any keyboard layout.
+        event.preventDefault();
+        useProjectStore.getState().unionSelected();
       } else if (key === 's') {
         event.preventDefault();
         useProjectStore.getState().saveProject();
@@ -143,7 +140,7 @@ export default function App() {
               data-keep-selection
             >
               <span>Слои</span>
-              <HelpHint text="Сверху вниз = порядок вырезания: верхний элемент делает гнёзда в нижних. Перетащите строку, чтобы переместить элемент в любую группу. Двойной клик — переименовать. ⌘/Ctrl-клик добавляет к выбору, Shift-клик выбирает диапазон, ⌘/Ctrl+A — все элементы, ⌘G — сгруппировать, ⌥⇧U — объединить в одну деталь, Delete — удалить." />
+              <HelpHint text="Сверху вниз = порядок вырезания: верхний элемент делает гнёзда в нижних. Перетащите строку, чтобы переместить элемент в любую группу. Двойной клик — переименовать. ⌘/Ctrl-клик добавляет к выбору, Shift-клик выбирает диапазон, ⌘/Ctrl+A — все элементы, ⌘G — сгруппировать, ⌘U — объединить в одну деталь, Delete — удалить." />
               <LayerTools />
             </div>
             <LayerTree />

@@ -55,6 +55,7 @@ import {
   createGroup,
   markUnions,
   clearUnions,
+  ungroupInTree,
   moveNodesInTree,
   removeFromTree,
   renameInTree,
@@ -204,6 +205,10 @@ interface AppState {
   unionSelected: () => void;
   /** Turns a union made by the tool back into a plain group. */
   ununionSelected: () => void;
+  /** Dissolves the selected group: its children take its place (⌘⇧G is not bound: browsers use it). */
+  ungroupSelected: () => void;
+  /** Folds or unfolds a group row. Not an edit: no undo step, no rebuild — only the tree changes. */
+  toggleCollapsed: (nodeId: string) => void;
   /** Renames an element or a group; empty names are ignored. */
   renameNode: (nodeId: string, name: string) => void;
   /** Drag & drop: puts `nodeId` next to `targetId` or inside it when it is a group. */
@@ -530,11 +535,61 @@ export const useProjectStore = create<AppState>()((set, get) => ({
       const tree = markUnions(project.tree, [node.id]);
       if (!tree) return;
       pushHistory(set, get, 'union');
-      set({ project: { ...project, tree, document: applyTreeEdit(get().baseDocument, tree) } });
+      set({
+        project: {
+          ...project,
+          tree,
+          document: applyTreeEdit(get().baseDocument, tree),
+          // A fresh union opens folded: its parts are implementation details.
+          settings: {
+            ...project.settings,
+            [node.id]: { ...(project.settings[node.id] ?? {}), collapsed: true },
+          },
+        },
+      });
       scheduleRebuild(set, get, 0);
       return;
     }
     wrapSelection(set, get, selectedIds, true);
+  },
+
+  ungroupSelected: () => {
+    const { project, selectedIds } = get();
+    if (!project || selectedIds.length !== 1) return;
+    const nodeId = selectedIds[0];
+    const result = ungroupInTree(project.document, project.tree, nodeId);
+    if (!result) return;
+
+    const parent =
+      result.parentId === ''
+        ? project.document.root
+        : findNode(project.document.root, result.parentId);
+    const siblings = parent
+      ? orderedChildren(parent, project.settings).map((child) => child.id)
+      : [];
+    const position = siblings.indexOf(nodeId);
+    const order = siblings.filter((id) => id !== nodeId);
+    order.splice(position < 0 ? order.length : position, 0, ...result.movedIds);
+
+    const parentKey = orderKeyFor(project.document, result.parentId);
+    const settings = {
+      ...project.settings,
+      [parentKey]: { ...(project.settings[parentKey] ?? {}), childOrder: order },
+    };
+    // The group is gone: its own settings go with it, the children keep theirs.
+    delete settings[nodeId];
+
+    pushHistory(set, get, 'ungroup');
+    set({
+      project: {
+        ...project,
+        tree: result.edit,
+        document: applyTreeEdit(get().baseDocument, result.edit),
+        settings,
+      },
+      selectedIds: result.movedIds,
+    });
+    scheduleRebuild(set, get, 0);
   },
 
   ununionSelected: () => {
@@ -545,6 +600,22 @@ export const useProjectStore = create<AppState>()((set, get) => ({
     pushHistory(set, get, 'ununion');
     set({ project: { ...project, tree, document: applyTreeEdit(get().baseDocument, tree) } });
     scheduleRebuild(set, get, 0);
+  },
+
+  toggleCollapsed: (nodeId) => {
+    const { project } = get();
+    if (!project) return;
+    // Only containers can be folded; leaves have nothing to hide.
+    const node = findNode(project.document.root, nodeId);
+    if (!node || node.kind !== 'group' || node.children.length === 0) return;
+    const current = project.settings[nodeId] ?? {};
+    const next: NodeSettings = { ...current };
+    if (current.collapsed === true) delete next.collapsed;
+    else next.collapsed = true;
+    const settings = { ...project.settings };
+    if (Object.keys(next).length === 0) delete settings[nodeId];
+    else settings[nodeId] = next;
+    set({ project: { ...project, settings } });
   },
 
   renameNode: (nodeId, name) => {
@@ -939,6 +1010,8 @@ function wrapSelection(set: SetState, get: GetState, ids: string[], union: boole
       settings: {
         ...project.settings,
         [parentKey]: { ...(project.settings[parentKey] ?? {}), childOrder: order },
+        // A new group opens folded: the place it takes was one row before, so the tree stays calm.
+        [result.groupId]: { ...(project.settings[result.groupId] ?? {}), collapsed: true },
       },
     },
     selectedIds: [result.groupId],

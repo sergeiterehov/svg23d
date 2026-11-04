@@ -230,7 +230,9 @@ export function createGroup(
   const parentId = anchor.parent.id === document.root.id ? ROOT : anchor.parent.id;
   const movedIds = candidates.sort((a, b) => (order.get(a) ?? 0) - (order.get(b) ?? 0));
 
-  const existing = new Set<string>([...index.keys(), ...edit.groups]);
+  // Removed ids count as taken: a group that was dissolved or deleted must not come back to life
+  // under the same name (applyTreeEdit prunes anything listed in `removed`).
+  const existing = new Set<string>([...index.keys(), ...edit.groups, ...edit.removed]);
   let number = edit.groups.length + 1;
   let groupId = `group-${number}`;
   while (existing.has(groupId)) {
@@ -329,6 +331,46 @@ export function removeFromTree(edit: TreeEdit, ids: string[]): TreeEdit | null {
   // A removed union must not leave a dangling id behind (the flag is re-applied from this list).
   const unions = edit.unions.filter((id) => !removed.has(id));
   return { ...edit, parents, removed: [...removed], unions };
+}
+
+export interface UngroupResult {
+  edit: TreeEdit;
+  /** Where the children went (`''` for the document root). */
+  parentId: string;
+  /** Children that moved up, in the order they had inside the group. */
+  movedIds: string[];
+}
+
+/**
+ * Dissolves a group (ADR-0026): its children take its place in the parent and the group itself is
+ * removed from the overlay. A union is not a plain group — «Разъединить» clears its flag first.
+ */
+export function ungroupInTree(
+  document: SvgDocument,
+  edit: TreeEdit,
+  nodeId: string,
+): UngroupResult | null {
+  const index = indexNodes(document.root);
+  const entry = index.get(nodeId);
+  if (!entry || entry.node.kind !== 'group' || entry.node.children.length === 0) return null;
+
+  const group = entry.node;
+  const parentId = entry.parent.id === document.root.id ? ROOT : entry.parent.id;
+  const parents = { ...edit.parents };
+  for (const child of group.children) parents[child.id] = parentId;
+  delete parents[nodeId];
+
+  return {
+    edit: {
+      ...edit,
+      parents,
+      removed: Array.from(new Set([...edit.removed, nodeId])),
+      groups: edit.groups.filter((id) => id !== nodeId),
+      unions: edit.unions.filter((id) => id !== nodeId),
+    },
+    parentId,
+    movedIds: group.children.map((child) => child.id),
+  };
 }
 
 /** Marks nodes as union objects: printed as one body, children's settings ignored (ADR-0028). */

@@ -3,7 +3,7 @@ import clsx from 'clsx';
 import type { NodeSettings, SvgDocNode } from '@core/model/types';
 import { effectiveSettingsFor } from '@core/solver/inheritance';
 import { orderedChildren } from '@core/solver/order';
-import { findNode } from '@core/solver/resolveLeaves';
+import { fallbackFillOf, findNode } from '@core/solver/resolveLeaves';
 import { findUnionOwner } from '@core/solver/selection';
 import { useProjectStore } from '../../store/useProjectStore';
 import { ColorChip } from '../common/Toggle';
@@ -20,7 +20,7 @@ export interface TreeDrag {
 }
 
 interface TreeUi {
-  collapsed: Set<string>;
+  /** Folds or unfolds a group row; the state is stored in the project (`settings.collapsed`). */
   toggle: (id: string) => void;
   editingId: string | null;
   startEditing: (id: string) => void;
@@ -39,16 +39,27 @@ interface TreeUi {
 function flattenRows(
   node: SvgDocNode,
   settings: Record<string, NodeSettings>,
-  collapsed: Set<string>,
   out: string[] = [],
 ): string[] {
   for (const child of [...orderedChildren(node, settings)].reverse()) {
     out.push(child.id);
     // A union expands like any group: its contents stay editable — drag a shape out of it, delete it
     // or add another one; only the object that reaches the solver is merged (ADR-0028).
-    if (!collapsed.has(child.id)) flattenRows(child, settings, collapsed, out);
+    if (settings[child.id]?.collapsed !== true) flattenRows(child, settings, out);
   }
   return out;
+}
+
+/** The union icon is drawn in the body's colour, but a very dark colour would vanish on the panel. */
+function readableIconColour(hex: string): string {
+  const match = /^#([0-9a-f]{6})$/i.exec(hex);
+  if (!match) return '#94a3b8';
+  const value = Number.parseInt(match[1], 16);
+  const r = (value >> 16) & 0xff;
+  const g = (value >> 8) & 0xff;
+  const b = value & 0xff;
+  const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  return luminance < 0.22 ? '#94a3b8' : hex;
 }
 
 /** Shapes behind the given nodes, de-duplicated: how many objects a union would merge. */
@@ -68,30 +79,23 @@ function countShapes(root: SvgDocNode, ids: string[]): number {
 export function LayerTree() {
   const project = useProjectStore((s) => s.project);
   const moveNodes = useProjectStore((s) => s.moveNodes);
-  // Collapsing lives above the rows so Shift-click can work on the rows that are actually visible.
-  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
+  const toggleCollapsed = useProjectStore((s) => s.toggleCollapsed);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [drag, setDrag] = useState<TreeDrag | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; nodeId: string } | null>(null);
   /** Last row clicked without Shift: the range starts there. */
   const anchorRef = useRef<string | null>(null);
+  // Folded rows come from the project itself, so the tree opens the way it was left.
   const rows = useMemo(
-    () => (project ? flattenRows(project.document.root, project.settings, collapsed) : []),
-    [project, collapsed],
+    () => (project ? flattenRows(project.document.root, project.settings) : []),
+    [project],
   );
   const rowIndex = useMemo(() => new Map(rows.map((id, index) => [id, index])), [rows]);
 
   if (!project) return null;
 
   const ui: TreeUi = {
-    collapsed,
-    toggle: (id) =>
-      setCollapsed((current) => {
-        const next = new Set(current);
-        if (next.has(id)) next.delete(id);
-        else next.add(id);
-        return next;
-      }),
+    toggle: toggleCollapsed,
     editingId,
     startEditing: setEditingId,
     stopEditing: () => setEditingId(null),
@@ -155,6 +159,7 @@ function TreeContextMenu({
   const groupSelected = useProjectStore((s) => s.groupSelected);
   const unionSelected = useProjectStore((s) => s.unionSelected);
   const ununionSelected = useProjectStore((s) => s.ununionSelected);
+  const ungroupSelected = useProjectStore((s) => s.ungroupSelected);
   const removeSelected = useProjectStore((s) => s.removeSelected);
   const selectedIds = useProjectStore((s) => s.selectedIds);
   const project = useProjectStore((s) => s.project);
@@ -197,6 +202,11 @@ function TreeContextMenu({
     selectedIds.length === 1 && project?.tree.unions.includes(selectedIds[0])
       ? selectedIds[0]
       : null;
+  // «Разгруппировать» is for plain groups; a union goes through «Разъединить».
+  const target = project ? findNode(project.document.root, nodeId) : null;
+  const canUngroup = Boolean(
+    target && target.kind === 'group' && target.children.length > 0 && !target.union,
+  );
 
   return (
     <div
@@ -245,7 +255,7 @@ function TreeContextMenu({
         )}
       >
         <span>Объединить</span>
-        <span className="text-[10px] text-slate-500">⌥⇧U</span>
+        <span className="text-[10px] text-slate-500">⌘U</span>
       </button>
       {unionId && (
         <button
@@ -259,6 +269,20 @@ function TreeContextMenu({
         >
           <span>Разъединить</span>
           <span className="text-[10px] text-slate-500">вернуть части</span>
+        </button>
+      )}
+      {canUngroup && (
+        <button
+          type="button"
+          role="menuitem"
+          onClick={() => {
+            ungroupSelected();
+            onClose();
+          }}
+          className={clsx(item, 'text-slate-200 hover:bg-slate-800 hover:text-white')}
+        >
+          <span>Разгруппировать</span>
+          <span className="text-[10px] text-slate-500">поднять элементы</span>
         </button>
       )}
       <button
@@ -323,9 +347,11 @@ function TreeRow({ node, depth, ui, anchorRef, onDrop }: TreeRowProps) {
     project.global,
     node.id,
   );
-  // A part of a union has no heights of its own and no meaningful range: the body is the union's.
-  const unionPart = node.union !== true && findUnionOwner(project.document.root, node.id) !== null;
-  const range = unionPart ? null : effective;
+  // A part of a union has no heights or colour of its own: both come from the merged body.
+  const unionOwner = node.union === true ? null : findUnionOwner(project.document.root, node.id);
+  const range = unionOwner ? null : effective;
+  const colourNode = unionOwner ?? node;
+  const colour = project.settings[colourNode.id]?.colorOverride ?? fallbackFillOf(colourNode);
   const isSelected = selectedIds.includes(node.id);
   const isHovered = hoveredId === node.id;
   const isHidden = effective?.hidden === true;
@@ -334,10 +360,8 @@ function TreeRow({ node, depth, ui, anchorRef, onDrop }: TreeRowProps) {
   const hiddenByGroup = isHidden && !ownHidden;
   const isGroup = node.kind === 'group';
   const hasChildren = node.children.length > 0;
-  const unionColor =
-    project.settings[node.id]?.colorOverride ?? (node.fill === 'none' ? undefined : node.fill);
   const isPart = project.settings[node.id]?.isPart === true;
-  const expanded = hasChildren && !ui.collapsed.has(node.id);
+  const expanded = hasChildren && project.settings[node.id]?.collapsed !== true;
   const children = [...orderedChildren(node, project.settings)].reverse();
   const editing = ui.editingId === node.id;
   const dragOver = ui.drag?.over?.id === node.id ? ui.drag.over.zone : null;
@@ -440,17 +464,18 @@ function TreeRow({ node, depth, ui, anchorRef, onDrop }: TreeRowProps) {
         {node.union ? (
           // Merged body: the icon carries the object's colour, the shape says "not just a container".
           <span
-            className="grid shrink-0 place-items-center text-slate-400"
-            style={unionColor ? { color: unionColor } : undefined}
+            className="grid shrink-0 place-items-center"
+            style={{ color: readableIconColour(colour) }}
             title="Объединение"
           >
             <UnionIcon className="h-3.5 w-3.5" />
           </span>
-        ) : isGroup ? (
+        ) : isGroup && !unionOwner ? (
           // Groups have no colour of their own: the folder says "this is a container".
           <FolderIcon className="h-3.5 w-3.5 text-slate-400" />
         ) : (
-          <ColorChip color={project.settings[node.id]?.colorOverride ?? node.fill} />
+          // Parts of a union wear the union's colour: their own is ignored by the solver.
+          <ColorChip color={colour} />
         )}
 
         {editing ? (

@@ -19,6 +19,12 @@ const svg = (fill: string): string =>
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/** Waits for an asynchronous action (opening a project reads IndexedDB) to land. */
+async function waitFor(check: () => boolean, timeoutMs = 2000): Promise<void> {
+  const started = Date.now();
+  while (!check() && Date.now() - started < timeoutMs) await sleep(10);
+}
+
 /** Simulates a page reload: the in-memory state is thrown away, the storage is kept. */
 async function reload(): Promise<void> {
   useProjectStore.getState().reset();
@@ -119,7 +125,7 @@ describe('library', () => {
     await useProjectStore.getState().persist();
     useProjectStore.getState().importSvg(svg('#00ff00'), 'logo.svg');
     useProjectStore.getState().resolveImport('existing');
-    await sleep(0);
+    await waitFor(() => useProjectStore.getState().projectId === firstId);
 
     expect(useProjectStore.getState().projectId).toBe(firstId);
     expect(useProjectStore.getState().project?.source).toBe(source);
@@ -201,6 +207,29 @@ describe('library', () => {
     expect(useProjectStore.getState().library).toHaveLength(0);
     expect(useProjectStore.getState().projectId).toBeNull();
     expect(useProjectStore.getState().status).toBe('empty');
+  });
+});
+
+describe('folded rows', () => {
+  it('creates a folded group and keeps the state with the project', async () => {
+    useProjectStore.getState().importSvg(svg('#ff0000'), 'one.svg');
+    useProjectStore.getState().select('plate');
+    useProjectStore.getState().groupSelected();
+    const groupId = useProjectStore.getState().selectedIds[0];
+    expect(useProjectStore.getState().project?.settings[groupId]?.collapsed).toBe(true);
+
+    await useProjectStore.getState().persist();
+    await reload();
+    expect(useProjectStore.getState().project?.settings[groupId]?.collapsed).toBe(true);
+
+    useProjectStore.getState().toggleCollapsed(groupId);
+    expect(useProjectStore.getState().project?.settings[groupId]?.collapsed).toBeUndefined();
+  });
+
+  it('ignores leaves', () => {
+    useProjectStore.getState().importSvg(svg('#ff0000'), 'one.svg');
+    useProjectStore.getState().toggleCollapsed('plate');
+    expect(useProjectStore.getState().project?.settings.plate?.collapsed).toBeUndefined();
   });
 });
 

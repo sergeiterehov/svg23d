@@ -11,6 +11,7 @@ import {
   orderKeyFor,
   removeFromTree,
   renameInTree,
+  ungroupInTree,
 } from '@core/model/treeEdit';
 import { parseSvg } from '@core/svg/parseSvg';
 import { findPartRoots } from '@core/solver/resolveLeaves';
@@ -239,5 +240,75 @@ describe('renameInTree', () => {
     const edit = renameInTree(document(), EMPTY_TREE_EDIT, 'a', 'Фон')!;
     expect(edit.names.a).toBe('Фон');
     expect(findNodeIn(applyTreeEdit(document(), edit).root, 'a')?.name).toBe('Фон');
+  });
+});
+
+describe('ungroupInTree', () => {
+  it('lifts the children into the parent and removes the group', () => {
+    const edit = {
+      ...EMPTY_TREE_EDIT,
+      names: { 'group-1': 'Группа' },
+      groups: ['group-1'],
+      parents: { a: 'group-1', b: 'group-1' },
+    };
+    const grouped = applyTreeEdit(document(), edit);
+    const result = ungroupInTree(grouped, edit, 'group-1');
+    expect(result?.movedIds).toEqual(['a', 'b']);
+    // A created group lives at the root, so its children land there too.
+    expect(result?.parentId).toBe('');
+
+    const after = applyTreeEdit(document(), result!.edit);
+    expect(findNodeIn(after.root, 'group-1')).toBeNull();
+    expect(after.root.children.map((child) => child.id)).toEqual(['top', 'a', 'b']);
+    expect(result?.edit.groups).toEqual([]);
+    expect(result?.edit.unions).toEqual([]);
+  });
+
+  it('dissolves an SVG group and forgets union flags', () => {
+    const edit = {
+      ...EMPTY_TREE_EDIT,
+      groups: ['group-1'],
+      parents: { a: 'group-1', b: 'group-1' },
+      unions: ['group-1'],
+    };
+    const grouped = applyTreeEdit(document(), edit);
+    const result = ungroupInTree(grouped, edit, 'group-1');
+    expect(result?.edit.unions).toEqual([]);
+
+    // An SVG group is dissolved the same way: its children move up to the parent.
+    const svgGroup = ungroupInTree(document(), EMPTY_TREE_EDIT, 'inner');
+    expect(svgGroup?.movedIds).toEqual(['c', 'd']);
+    const after = applyTreeEdit(document(), svgGroup!.edit);
+    expect(findNodeIn(after.root, 'inner')).toBeNull();
+    expect(childIds(after, 'top')).toEqual(['a', 'b', 'c', 'd']);
+  });
+
+  it('does not reuse the id of a dissolved group', () => {
+    const edit = {
+      ...EMPTY_TREE_EDIT,
+      groups: ['group-1'],
+      parents: { a: 'group-1', b: 'group-1' },
+    };
+    const grouped = applyTreeEdit(document(), edit);
+    const dissolved = ungroupInTree(grouped, edit, 'group-1')!;
+    const regrouped = applyTreeEdit(document(), dissolved.edit);
+
+    const again = createGroup(regrouped, dissolved.edit, ['a', 'b'], '');
+    expect(again).not.toBeNull();
+    expect(again!.groupId).not.toBe('group-1');
+    // The new group really appears in the document (the old id would be pruned as removed).
+    const after = applyTreeEdit(document(), again!.edit);
+    expect(findNodeIn(after.root, again!.groupId)).not.toBeNull();
+  });
+
+  it('refuses shapes and groups without children', () => {
+    const doc = document();
+    expect(ungroupInTree(doc, EMPTY_TREE_EDIT, 'a')).toBeNull();
+    const empty = applyTreeEdit(doc, {
+      ...EMPTY_TREE_EDIT,
+      groups: ['group-9'],
+      parents: {},
+    });
+    expect(ungroupInTree(empty, { ...EMPTY_TREE_EDIT, groups: ['group-9'] }, 'group-9')).toBeNull();
   });
 });

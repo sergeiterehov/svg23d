@@ -50,6 +50,22 @@ function hasShapes(node: SvgDocNode): boolean {
   return node.children.some(hasShapes);
 }
 
+/**
+ * Colour of a node without its own override: its `fill`, or — for a group/union that has none — the
+ * first coloured shape inside. The solver uses the same rule for a union body, so the tree, the
+ * inspector and the model agree on the colour.
+ */
+export function fallbackFillOf(node: SvgDocNode): string {
+  if (node.fill !== 'none') return node.fill;
+  const stack = [...node.children];
+  while (stack.length > 0) {
+    const next = stack.shift() as SvgDocNode;
+    if (next.kind === 'shape' && next.fill !== 'none') return next.fill;
+    stack.push(...next.children);
+  }
+  return '#cccccc';
+}
+
 /** Default part roots: children of the root, or its grandchildren when the root has one child. */
 export function computeDefaultPartRoots(root: SvgDocNode): Set<string> {
   const roots = new Set<string>();

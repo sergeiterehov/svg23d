@@ -102,6 +102,8 @@ export interface NodeSettings {
   enabled?: boolean;
   /** Manual paint order override for this node's children (ids). */
   childOrder?: string[];
+  /** The row is folded in the layer tree. Interface state, but it belongs to the project. */
+  collapsed?: boolean;
 }
 
 export type ViewLighting = 'studio' | 'top' | 'flat';

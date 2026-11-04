@@ -1,4 +1,4 @@
-import { findNode, type PartInfo } from '@core/solver/resolveLeaves';
+import { fallbackFillOf, findNode, type PartInfo } from '@core/solver/resolveLeaves';
 import { effectiveSettingsFor } from '@core/solver/inheritance';
 import { collectSubtreeIds, findUnionOwner } from '@core/solver/selection';
 import type { BBox3, LeafStats, NodeSettings, ResolvedLeaf, SvgDocNode } from '@core/model/types';
@@ -248,7 +248,7 @@ function ElementPanel({ node }: { node: SvgDocNode }) {
 
           <FieldSection title="Вид">
             <ColorField
-              value={own.colorOverride ?? (node.union ? unionFill(node) : colourOf(node))}
+              value={own.colorOverride ?? fallbackFillOf(node)}
               // A group has no colour of its own: its children bring their own, so "none" is the default.
               empty={
                 node.kind === 'group' && !node.union && own.colorOverride === undefined
@@ -876,22 +876,6 @@ function Row({ label, value }: { label: string; value: string }) {
       <dd className="select-text tabular-nums text-slate-200">{value}</dd>
     </div>
   );
-}
-
-function colourOf(node: SvgDocNode): string {
-  return node.fill === 'none' ? '#cccccc' : node.fill;
-}
-
-/** Colour of a union object: its own fill, or the first coloured shape inside (the solver's rule). */
-function unionFill(node: SvgDocNode): string {
-  if (node.fill !== 'none') return node.fill;
-  const stack = [...node.children];
-  while (stack.length > 0) {
-    const next = stack.shift() as SvgDocNode;
-    if (next.kind === 'shape' && next.fill !== 'none') return next.fill;
-    stack.push(...next.children);
-  }
-  return '#cccccc';
 }
 
 function round(value: number): number {
