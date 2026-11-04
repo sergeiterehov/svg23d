@@ -47,12 +47,6 @@ export function applyTreeEdit(document: SvgDocument, edit: TreeEdit): SvgDocumen
   const root = cloneNode(document.root, -1);
   const removed = new Set(edit.removed);
 
-  const prune = (node: SvgDocNode): void => {
-    node.children = node.children.filter((child) => !removed.has(child.id));
-    for (const child of node.children) prune(child);
-  };
-  prune(root);
-
   const index = new Map<string, { node: SvgDocNode; parent: SvgDocNode }>();
   const indexTree = (node: SvgDocNode): void => {
     for (const child of node.children) {
@@ -94,6 +88,14 @@ export function applyTreeEdit(document: SvgDocument, edit: TreeEdit): SvgDocumen
     target.children.push(entry.node);
     entry.parent = target;
   }
+
+  // Deletion comes **after** the moves: an empty group that is removed must not take the elements that
+  // were just moved out of it with it (they are children of that group in the parsed document).
+  const prune = (node: SvgDocNode): void => {
+    node.children = node.children.filter((child) => !removed.has(child.id));
+    for (const child of node.children) prune(child);
+  };
+  prune(root);
 
   const finish = (node: SvgDocNode, depth: number): void => {
     node.depth = depth;

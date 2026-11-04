@@ -180,6 +180,35 @@ describe('moveNodesInTree (multi-selection)', () => {
   });
 });
 
+describe('moves combined with deletions', () => {
+  it('keeps an element that was moved out of a group before the group is deleted', () => {
+    const base = document();
+    // Move `c` out of `inner` to the root, then remove the (now single-child) group `inner`.
+    const moved = moveNodesInTree(base, EMPTY_TREE_EDIT, ['c'], 'top', 'inside')!;
+    const afterMove = applyTreeEdit(base, moved.edit);
+    const edit = removeFromTree(moved.edit, ['inner'])!;
+    const edited = applyTreeEdit(base, edit);
+
+    expect(edited.paintOrder).toContain('c');
+    expect(findNodeIn(edited.root, 'c')).not.toBeNull();
+    expect(parentIdOf(edited, 'c')).toBe('top');
+    // Only the group itself and what was left inside it are gone.
+    expect(childIds(edited, '')).toEqual(['top']);
+    expect(childIds(edited, 'inner')).toEqual([]);
+    // The move is still visible in the first snapshot: the group had `d` in it.
+    expect(childIds(afterMove, 'inner')).toEqual(['d']);
+  });
+
+  it('removes an element that was moved into the deleted group', () => {
+    const base = document();
+    const moved = moveNodesInTree(base, EMPTY_TREE_EDIT, ['a'], 'inner', 'inside')!;
+    const edit = removeFromTree(moved.edit, ['inner'])!;
+    const edited = applyTreeEdit(base, edit);
+    expect(findNodeIn(edited.root, 'a')).toBeNull();
+    expect(edited.paintOrder).toEqual(['b']);
+  });
+});
+
 describe('renameInTree', () => {
   it('ignores empty names and no-ops', () => {
     expect(renameInTree(document(), EMPTY_TREE_EDIT, 'a', '   ')).toBeNull();
