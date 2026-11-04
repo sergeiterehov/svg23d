@@ -77,6 +77,7 @@ export class GeometryClient {
         jobId: message.jobId,
         parts: message.parts,
         stats: message.stats,
+        leafStats: message.leafStats,
         warnings: message.warnings,
       });
     } else {

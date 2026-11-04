@@ -23,7 +23,7 @@ export function SelectField({ value, options, onChange, className }: SelectField
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="w-full appearance-none rounded-md border border-slate-700 bg-slate-900/70 py-1.5 pl-2 pr-8 text-sm text-slate-100 outline-none transition focus:border-sky-500 focus:ring-1 focus:ring-sky-500/40"
+        className="h-[34px] w-full appearance-none rounded-md border border-slate-700 bg-slate-900/70 pl-2 pr-8 text-sm text-slate-100 outline-none transition focus:border-sky-500 focus:ring-1 focus:ring-sky-500/40"
       >
         {options.map((option) => (
           <option key={option.value} value={option.value}>

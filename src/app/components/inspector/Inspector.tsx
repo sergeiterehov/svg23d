@@ -1,7 +1,8 @@
-import { findNode } from '@core/solver/resolveLeaves';
+import { findNode, type PartInfo } from '@core/solver/resolveLeaves';
 import { effectiveSettingsFor } from '@core/solver/inheritance';
-import type { SvgDocNode } from '@core/model/types';
-import { useProjectStore } from '../../store/useProjectStore';
+import { collectSubtreeIds } from '@core/solver/selection';
+import type { BBox3, LeafStats, ResolvedLeaf, SvgDocNode } from '@core/model/types';
+import { useProjectStore, type BuildResultState } from '../../store/useProjectStore';
 import { NumberField } from '../common/NumberField';
 import { ColorChip, Toggle } from '../common/Toggle';
 import { HelpHint } from '../common/Icon';
@@ -184,19 +185,21 @@ function ProjectPanel() {
             value={global.fitSizeMm}
             step={5}
             min={1}
-            hint="Ширина или высота модели в мм; пропорции сохраняются"
+            hideReset
+            hint="Ширина, высота или бо́льшая сторона модели в мм; пропорции сохраняются"
             onChange={(value) => updateGlobal({ fitSizeMm: value ?? global.fitSizeMm })}
           />
           <label className="block">
-            <span className="text-xs text-slate-400">по</span>
+            <span className="flex h-4 items-center text-xs leading-none text-slate-400">по</span>
             <SelectField
               className="mt-1"
               value={global.fit}
               options={[
+                { value: 'max', label: 'максимум' },
                 { value: 'width', label: 'ширине' },
                 { value: 'height', label: 'высоте' },
               ]}
-              onChange={(value) => updateGlobal({ fit: value as 'width' | 'height' })}
+              onChange={(value) => updateGlobal({ fit: value as 'width' | 'height' | 'max' })}
             />
           </label>
         </div>
@@ -206,12 +209,14 @@ function ProjectPanel() {
             label="Высота от"
             value={global.defaultZFrom}
             step={0.2}
+            hideReset
             onChange={(value) => updateGlobal({ defaultZFrom: value ?? 0 })}
           />
           <NumberField
             label="Высота до"
             value={global.defaultZTo}
             step={0.2}
+            hideReset
             onChange={(value) => updateGlobal({ defaultZTo: value ?? 2 })}
           />
         </div>
@@ -221,6 +226,7 @@ function ProjectPanel() {
           value={global.defaultClearance}
           step={0.05}
           min={0}
+          hideReset
           onChange={(value) => updateGlobal({ defaultClearance: value ?? 0 })}
         />
 
@@ -263,44 +269,124 @@ function StatsPanel() {
   const result = useProjectStore((s) => s.result);
   const project = useProjectStore((s) => s.project);
   const parts = useProjectStore((s) => s.parts);
+  const leaves = useProjectStore((s) => s.leaves);
+  const selectedId = useProjectStore((s) => s.selectedId);
 
   if (!project) return null;
+
+  const node = selectedId ? findNode(project.document.root, selectedId) : null;
 
   return (
     <section className="p-3">
       <h2 className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
         Результат
       </h2>
+
       {!result ? (
         <p className="mt-2 text-xs text-slate-500">Модель не построена</p>
+      ) : !node ? (
+        <>
+          <dl className="mt-2 space-y-1 text-[11px]">
+            <Row label="Деталей" value={String(result.stats.partCount)} />
+            <Row
+              label="Треугольников"
+              value={result.stats.triangleCount.toLocaleString('ru-RU')}
+            />
+            <Row label="Объём" value={formatVolume(result.stats.volume)} />
+            <Row label="Габариты" value={formatBox(result.stats.bbox)} />
+            <Row label="Время" value={`${result.stats.durationMs} мс`} />
+          </dl>
+          {parts.length > 1 && <PartList parts={parts} />}
+        </>
       ) : (
-        <dl className="mt-2 space-y-1 text-[11px]">
-          <Row label="Деталей" value={String(result.stats.partCount)} />
-          <Row label="Треугольников" value={result.stats.triangleCount.toLocaleString('ru-RU')} />
-          <Row label="Объём" value={`${(result.stats.volume / 1000).toFixed(2)} см³`} />
-          <Row
-            label="Габариты"
-            value={`${round(result.stats.bbox.max[0] - result.stats.bbox.min[0])} × ${round(
-              result.stats.bbox.max[1] - result.stats.bbox.min[1],
-            )} × ${round(result.stats.bbox.max[2] - result.stats.bbox.min[2])} мм`}
-          />
-          <Row label="Время" value={`${result.stats.durationMs} мс`} />
-        </dl>
-      )}
-
-      {parts.length > 1 && (
-        <div className="mt-3 space-y-1">
-          <h3 className="text-[10px] uppercase tracking-wider text-slate-500">Детали</h3>
-          {parts.map((part) => (
-            <div key={part.id} className="flex items-center gap-2 text-[11px] text-slate-300">
-              <ColorChip color={part.color} size={10} />
-              <span className="truncate">{part.name}</span>
-            </div>
-          ))}
-        </div>
+        <SelectionStats node={node} result={result} parts={parts} leaves={leaves} />
       )}
     </section>
   );
+}
+
+/** Numbers for the selected element (a shape) or the sum over its subtree (a group). */
+function SelectionStats({
+  node,
+  result,
+  parts,
+  leaves,
+}: {
+  node: SvgDocNode;
+  result: BuildResultState;
+  parts: PartInfo[];
+  leaves: ResolvedLeaf[];
+}) {
+  const subtree = collectSubtreeIds(node);
+  const nodeLeaves = leaves.filter((leaf) => subtree.has(leaf.id));
+  const stats = nodeLeaves
+    .map((leaf) => result.leafStats[leaf.id])
+    .filter((value): value is LeafStats => Boolean(value));
+
+  if (stats.length === 0) {
+    return (
+      <p className="mt-2 text-xs leading-relaxed text-slate-500">
+        Элемент не вошёл в модель: полностью перекрыт верхними элементами или пуст.
+      </p>
+    );
+  }
+
+  const volume = stats.reduce((sum, item) => sum + item.volume, 0);
+  const triangles = stats.reduce((sum, item) => sum + item.triangleCount, 0);
+  const box = unionBoxes(stats.map((item) => item.bbox));
+
+  const partIds = new Set(nodeLeaves.map((leaf) => leaf.partId));
+  const groupParts = parts.filter((part) => partIds.has(part.id));
+
+  return (
+    <>
+      <dl className="mt-2 space-y-1 text-[11px]">
+        {node.kind === 'group' && <Row label="Элементов" value={String(stats.length)} />}
+        <Row label="Треугольников" value={triangles.toLocaleString('ru-RU')} />
+        <Row label="Объём" value={formatVolume(volume)} />
+        <Row label="Габариты" value={formatBox(box)} />
+      </dl>
+      {node.kind === 'group' && groupParts.length > 0 && <PartList parts={groupParts} />}
+    </>
+  );
+}
+
+function PartList({ parts }: { parts: PartInfo[] }) {
+  return (
+    <div className="mt-3 space-y-1">
+      <h3 className="text-[10px] uppercase tracking-wider text-slate-500">Детали</h3>
+      {parts.map((part) => (
+        <div key={part.id} className="flex items-center gap-2 text-[11px] text-slate-300">
+          <ColorChip color={part.color} size={10} />
+          <span className="truncate">{part.name}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function formatVolume(mm3: number): string {
+  return `${(mm3 / 1000).toFixed(2)} см³`;
+}
+
+function formatBox(box: BBox3): string {
+  return `${round(box.max[0] - box.min[0])} × ${round(box.max[1] - box.min[1])} × ${round(
+    box.max[2] - box.min[2],
+  )} мм`;
+}
+
+function unionBoxes(boxes: BBox3[]): BBox3 {
+  const result: BBox3 = {
+    min: [Infinity, Infinity, Infinity],
+    max: [-Infinity, -Infinity, -Infinity],
+  };
+  for (const box of boxes) {
+    for (let axis = 0; axis < 3; axis++) {
+      result.min[axis] = Math.min(result.min[axis], box.min[axis]);
+      result.max[axis] = Math.max(result.max[axis], box.max[axis]);
+    }
+  }
+  return result;
 }
 
 function Row({ label, value }: { label: string; value: string }) {

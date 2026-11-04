@@ -55,6 +55,7 @@ async function handleBuild(jobId: number, leaves: Parameters<typeof buildModel>[
       jobId,
       parts: result.parts,
       stats: { ...result.stats, durationMs: Date.now() - started },
+      leafStats: result.leafStats,
       warnings: result.warnings,
     },
     transfer,

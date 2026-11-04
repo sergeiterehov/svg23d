@@ -96,11 +96,22 @@ describe('resolveLeaves', () => {
     const resolved = resolveLeaves({
       document: doc,
       settings: {},
-      global: { ...DEFAULT_GLOBAL_SETTINGS, fitSizeMm: 200 },
+      global: { ...DEFAULT_GLOBAL_SETTINGS, fitSizeMm: 200, fit: 'width' },
     });
     expect(resolved.widthMm).toBeCloseTo(200, 6);
     const xs = resolved.leaves.flatMap((leaf) => leaf.contours.flat().map((p) => p.x));
     expect(Math.max(...xs) - Math.min(...xs)).toBeCloseTo(200, 4);
+  });
+
+  it('fits the larger side when fit is "max"', () => {
+    const doc = parseSample();
+    const resolved = resolveLeaves({
+      document: doc,
+      settings: {},
+      global: { ...DEFAULT_GLOBAL_SETTINGS, fitSizeMm: 200, fit: 'max' },
+    });
+    expect(Math.max(resolved.widthMm, resolved.heightMm)).toBeCloseTo(200, 6);
+    expect(resolved.heightMm).toBeGreaterThan(resolved.widthMm);
   });
 
   it('inherits group settings and allows overrides', () => {

@@ -22,7 +22,7 @@ export function Toolbar() {
   return (
     <header className="flex h-14 shrink-0 items-center gap-3 border-b border-slate-800 bg-slate-950/70 px-4">
       <div className="flex items-baseline gap-2">
-        <span className="text-sm font-semibold tracking-tight text-slate-100">svg23d</span>
+        <span className="text-sm font-semibold tracking-[0.12em] text-slate-100">SVG23D</span>
         <span className="text-[10px] uppercase tracking-wider text-slate-500">SVG → 3D</span>
       </div>
 
@@ -57,18 +57,22 @@ export function Toolbar() {
         {project && (
           <label className="flex items-center gap-1 text-[11px] text-slate-400">
             <span>Размер</span>
-            <input
-              type="number"
-              step={5}
-              min={1}
-              value={project.global.fitSizeMm}
-              onChange={(event) => {
-                const value = Number(event.target.value);
-                if (Number.isFinite(value) && value > 0) updateGlobal({ fitSizeMm: value });
-              }}
-              className="w-16 rounded-md border border-slate-700 bg-slate-900/70 px-1.5 py-1 text-right text-sm text-slate-100 outline-none focus:border-sky-500"
-            />
-            <span>мм</span>
+            <span className="relative">
+              <input
+                type="number"
+                step={5}
+                min={1}
+                value={project.global.fitSizeMm}
+                onChange={(event) => {
+                  const value = Number(event.target.value);
+                  if (Number.isFinite(value) && value > 0) updateGlobal({ fitSizeMm: value });
+                }}
+                className="h-8 w-20 rounded-md border border-slate-700 bg-slate-900/70 pl-1.5 pr-7 text-right text-sm text-slate-100 outline-none focus:border-sky-500"
+              />
+              <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] leading-none text-slate-500">
+                мм
+              </span>
+            </span>
           </label>
         )}
 

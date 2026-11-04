@@ -3,6 +3,7 @@ import type {
   BBox3,
   BuildStats,
   DocumentWarning,
+  LeafStats,
   PartMesh,
   ResolvedLeaf,
 } from '../model/types';
@@ -37,6 +38,7 @@ export interface BuildOptions {
 export interface BuildOutput {
   parts: PartMesh[];
   stats: BuildStats;
+  leafStats: Record<string, LeafStats>;
   warnings: DocumentWarning[];
 }
 
@@ -49,6 +51,7 @@ interface Entry {
 export function buildModel({ api, leaves }: BuildOptions): BuildOutput {
   const startedAt = Date.now();
   const warnings: DocumentWarning[] = [];
+  const leafStats: Record<string, LeafStats> = {};
 
   const entries: Entry[] = [];
   for (const leaf of leaves) {
@@ -161,6 +164,16 @@ export function buildModel({ api, leaves }: BuildOptions): BuildOutput {
     list.push(solid);
     partSolids.set(leaf.partId, list);
     if (!partMeta.has(leaf.partId)) partMeta.set(leaf.partId, leaf);
+
+    const box = solid.boundingBox();
+    leafStats[leaf.id] = {
+      volume: Math.abs(solid.volume()),
+      triangleCount: solid.numTri(),
+      bbox: {
+        min: [box.min[0], box.min[1], box.min[2]],
+        max: [box.max[0], box.max[1], box.max[2]],
+      },
+    };
   }
 
   const parts: PartMesh[] = [];
@@ -211,6 +224,7 @@ export function buildModel({ api, leaves }: BuildOptions): BuildOutput {
 
   return {
     parts,
+    leafStats,
     warnings,
     stats: {
       leafCount: entries.length,

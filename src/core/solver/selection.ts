@@ -12,9 +12,10 @@ export function partIdForSelection(
 ): string | null {
   if (!selectedId) return null;
 
-  const ids = collectSubtreeIds(root, selectedId);
-  if (ids.size === 0) return null;
+  const node = findNode(root, selectedId);
+  if (!node) return null;
 
+  const ids = collectSubtreeIds(node);
   const partIds = new Set<string>();
   for (const leaf of leaves) {
     if (ids.has(leaf.id)) partIds.add(leaf.partId);
@@ -23,10 +24,9 @@ export function partIdForSelection(
   return partIds.values().next().value ?? null;
 }
 
-function collectSubtreeIds(root: SvgDocNode, id: string): Set<string> {
+/** Ids of the node and all its descendants. */
+export function collectSubtreeIds(node: SvgDocNode): Set<string> {
   const ids = new Set<string>();
-  const node = findNode(root, id);
-  if (!node) return ids;
 
   const stack: SvgDocNode[] = [node];
   while (stack.length > 0) {

@@ -1,10 +1,10 @@
 import type { BBox, Contour, GlobalSettings, SvgDocNode, Vec2 } from './types';
 
 export const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
-  fitSizeMm: 120,
-  fit: 'width',
+  fitSizeMm: 200,
+  fit: 'max',
   defaultZFrom: 0,
-  defaultZTo: 2,
+  defaultZTo: 30,
   defaultClearance: 0.15,
   defaultChamferTop: 0,
   defaultChamferBottom: 0,

@@ -23,7 +23,12 @@ export function computeUnitMapping(
   const boxWidth = Math.max(box.maxX - box.minX, 1e-6);
   const boxHeight = Math.max(box.maxY - box.minY, 1e-6);
   const target = Math.max(global.fitSizeMm, 0.1);
-  const scale = global.fit === 'height' ? target / boxHeight : target / boxWidth;
+  const scale =
+    global.fit === 'height'
+      ? target / boxHeight
+      : global.fit === 'max'
+        ? target / Math.max(boxWidth, boxHeight)
+        : target / boxWidth;
 
   const matrix: Matrix = [scale, 0, 0, -scale, -box.minX * scale, box.maxY * scale];
 

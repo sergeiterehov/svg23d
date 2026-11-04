@@ -5,6 +5,7 @@ import {
   type BuildStats,
   type DocumentWarning,
   type GlobalSettings,
+  type LeafStats,
   type NodeSettings,
   type PartMesh,
   type Project,
@@ -58,13 +59,20 @@ function getClient(): GeometryClient {
   return client;
 }
 
+export interface BuildResultState {
+  parts: PartMesh[];
+  stats: BuildStats;
+  leafStats: Record<string, LeafStats>;
+  warnings: DocumentWarning[];
+}
+
 interface AppState {
   project: Project | null;
   leaves: ResolvedLeaf[];
   parts: PartInfo[];
   modelSize: { widthMm: number; heightMm: number } | null;
   warnings: DocumentWarning[];
-  result: { parts: PartMesh[]; stats: BuildStats; warnings: DocumentWarning[] } | null;
+  result: BuildResultState | null;
   status: Status;
   error: string | null;
   selectedId: string | null;
@@ -376,7 +384,12 @@ async function runRebuild(set: SetState, get: GetState): Promise<void> {
   try {
     const response = await getClient().build(resolved.leaves);
     set({
-      result: { parts: response.parts, stats: response.stats, warnings: response.warnings },
+      result: {
+        parts: response.parts,
+        stats: response.stats,
+        leafStats: response.leafStats,
+        warnings: response.warnings,
+      },
       warnings: [...project.document.warnings, ...resolved.warnings, ...response.warnings],
       status: 'ready',
       error: null,

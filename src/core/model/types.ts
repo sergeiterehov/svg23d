@@ -99,8 +99,8 @@ export interface NodeSettings {
 export interface GlobalSettings {
   /** Target extent of the model along the fitted axis, in mm. */
   fitSizeMm: number;
-  /** Which axis to fit. */
-  fit: 'width' | 'height';
+  /** Which axis to fit: width, height, or the larger of the two. */
+  fit: 'width' | 'height' | 'max';
   defaultZFrom: number;
   defaultZTo: number;
   defaultClearance: number;
@@ -150,6 +150,13 @@ export interface MeshData {
   volume: number;
 }
 
+/** Per-element numbers, collected before leaves are merged into parts. */
+export interface LeafStats {
+  volume: number;
+  triangleCount: number;
+  bbox: BBox3;
+}
+
 export interface PartMesh extends MeshData {
   partId: string;
   name: string;
@@ -173,6 +180,7 @@ export interface BBox3 {
 export interface BuildResult {
   parts: PartMesh[];
   stats: BuildStats;
+  leafStats: Record<string, LeafStats>;
   warnings: DocumentWarning[];
 }
 
