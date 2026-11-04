@@ -182,6 +182,30 @@ export function RenameIcon({ className }: IconProps) {
   );
 }
 
+/** Stacked sheets: «Разложить по слоям» — the parts become a physical stack. */
+export function LayersIcon({ className }: IconProps) {
+  return (
+    <Svg className={className}>
+      <path d="m12 3 9 4.5-9 4.5-9-4.5z" />
+      <path d="m3 12.5 9 4.5 9-4.5" />
+      <path d="m3 17 9 4.5 9-4.5" />
+    </Svg>
+  );
+}
+
+/** Painter's palette: the colours of the model and the tool that reduces them (ADR-0033). */
+export function PaletteIcon({ className }: IconProps) {
+  return (
+    <Svg className={className}>
+      {/* Body with the thumb notch on the right, where the eye of the palette sits. */}
+      <path d="M12 21.5a9.5 9.5 0 1 1 0-19c5.2 0 9.5 3.6 9.5 8 0 2.2-1.6 3.5-3.4 3.5h-1.7a1.9 1.9 0 0 0 0 3.8c0 2.2-1.9 3.7-4.4 3.7z" />
+      <circle cx="8" cy="9" r="1" />
+      <circle cx="12" cy="6.4" r="1" />
+      <circle cx="15.6" cy="8.8" r="1" />
+    </Svg>
+  );
+}
+
 /** Wrench crossed with a hammer (like a hammer-and-sickle emblem): the layers tools menu. */
 export function ToolsIcon({ className }: IconProps) {
   return (

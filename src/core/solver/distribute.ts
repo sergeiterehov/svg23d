@@ -11,15 +11,37 @@ import { findNode, findPartRoots } from './resolveLeaves';
  * above the hill still reaches down to the sky, and a dot inside the counter of a letter rests on the
  * background instead of balancing on a thin stroke.
  *
- * Its bottom is the **top** of the lowest of them sunk by `SINK_MM` into it, its top is `LAYER_MM`
- * above the highest of them. Without anything beneath, the element takes the project defaults — so
- * nothing hangs in the air.
+ * Its bottom is the **top** of the lowest of them sunk by `sinkMm` into it, its top is `layerMm`
+ * above the highest of them. Without anything beneath, the element takes the base heights (the
+ * project defaults unless the dialog overrides them) — so nothing hangs in the air.
  */
 export const LAYER_MM = 5;
 /** How deep a part bites into the one under it, so the two always share volume. */
-export const SINK_MM = 0.5;
+export const SINK_MM = 1;
 /** A support has to cover this share of the part's footprint: one stray cell is not a support. */
-const SUPPORT_SHARE = 0.02;
+export const SUPPORT_SHARE = 0.02;
+
+/**
+ * Every number the stack is built from (ADR-0033). The tool dialog opens with these defaults, so
+ * «Разложить по слоям» is a starting point rather than a decision baked into the code.
+ */
+export interface DistributeOptions {
+  /** How far above the highest support the part rises, mm. */
+  layerMm: number;
+  /** How deep the part bites into the lowest support, mm. */
+  sinkMm: number;
+  /** Share of the part's footprint a lower part must cover to count as a support (0…1). */
+  supportShare: number;
+  /** Heights for parts with nothing beneath; `undefined` means the project defaults. */
+  baseFrom?: number;
+  baseTo?: number;
+}
+
+export const DEFAULT_DISTRIBUTE_OPTIONS: DistributeOptions = {
+  layerMm: LAYER_MM,
+  sinkMm: SINK_MM,
+  supportShare: SUPPORT_SHARE,
+};
 
 function collectBox(node: SvgDocNode, box: BBox): void {
   if (node.bbox) {
@@ -48,7 +70,11 @@ export function distributeLayers(
   root: SvgDocNode,
   settings: Record<string, NodeSettings>,
   global: GlobalSettings,
+  options: DistributeOptions = DEFAULT_DISTRIBUTE_OPTIONS,
 ): Record<string, NodeSettings> {
+  const sinkMm = Math.max(0, options.sinkMm);
+  const layerMm = Math.max(0, options.layerMm);
+  const supportShare = Math.min(1, Math.max(0, options.supportShare));
   const next: Record<string, NodeSettings> = { ...settings };
   const ids = findPartRoots(root, settings);
   const nodes = ids.map((id) => findNode(root, id));
@@ -94,7 +120,7 @@ export function distributeLayers(
       if (owner < 0) continue;
       counts.set(owner, (counts.get(owner) ?? 0) + 1);
     }
-    const threshold = Math.max(1, Math.round(covered * SUPPORT_SHARE));
+    const threshold = Math.max(1, Math.round(covered * supportShare));
     const supports = [...counts.entries()]
       .filter(([, share]) => share >= threshold)
       .map(([owner]) => placed[owner])
@@ -103,13 +129,13 @@ export function distributeLayers(
     let zFrom: number;
     let zTo: number;
     if (supports.length === 0) {
-      zFrom = round(global.defaultZFrom);
-      zTo = round(global.defaultZTo);
+      zFrom = round(options.baseFrom ?? global.defaultZFrom);
+      zTo = round(options.baseTo ?? global.defaultZTo);
     } else {
-      // Bottom = top of the lowest part under this one (sunk by half a millimetre), top = 5 mm above
-      // the highest one.
-      zFrom = round(Math.min(...supports.map((item) => item.zTo)) - SINK_MM);
-      zTo = round(Math.max(...supports.map((item) => item.zTo)) + LAYER_MM);
+      // Bottom = top of the lowest part under this one (sunk by a fraction of a millimetre), top =
+      // `layerMm` above the highest one.
+      zFrom = round(Math.min(...supports.map((item) => item.zTo)) - sinkMm);
+      zTo = round(Math.max(...supports.map((item) => item.zTo)) + layerMm);
     }
 
     placed.push({ zFrom, zTo });

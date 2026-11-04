@@ -60,7 +60,7 @@ import {
   renameInTree,
   type TreeEdit,
 } from '@core/model/treeEdit';
-import { distributeLayers } from '@core/solver/distribute';
+import { distributeLayers, type DistributeOptions } from '@core/solver/distribute';
 import { reducePalette, paletteUsage, type PaletteEntry } from '@core/color/palette';
 import { writeThreeMf } from '@core/export/threemf';
 import { writeBinaryStl } from '@core/export/stl';
@@ -214,7 +214,8 @@ interface AppState {
   moveNodes: (nodeIds: string[], targetId: string, position: 'before' | 'after' | 'inside') => void;
   /** Deletes the selected elements and their subtrees. */
   removeSelected: () => void;
-  distributeZ: () => void;
+  /** Stacks the parts on top of each other; the dialog passes its own numbers (ADR-0033). */
+  distributeZ: (options?: DistributeOptions) => void;
   /** Colours actually used by the model, each with the area it covers in mm² (ADR-0024). */
   paletteUsage: () => PaletteEntry[];
   /** Reduces the palette to at most `count` colours; returns how many colours are left. */
@@ -653,10 +654,15 @@ export const useProjectStore = create<AppState>()((set, get) => ({
   },
 
   /** Stacks the parts in Z with a small overlap so upper parts cut sockets in lower ones. */
-  distributeZ: () => {
+  distributeZ: (options) => {
     const { project } = get();
     if (!project) return;
-    const settings = distributeLayers(project.document.root, project.settings, project.global);
+    const settings = distributeLayers(
+      project.document.root,
+      project.settings,
+      project.global,
+      options,
+    );
     pushHistory(set, get, 'distribute');
     set({ project: { ...project, settings } });
     scheduleRebuild(set, get, 0);

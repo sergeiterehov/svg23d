@@ -3,7 +3,12 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_GLOBAL_SETTINGS } from '@core/model/defaults';
-import { distributeLayers, LAYER_MM, SINK_MM } from '@core/solver/distribute';
+import {
+  distributeLayers,
+  LAYER_MM,
+  SINK_MM,
+  type DistributeOptions,
+} from '@core/solver/distribute';
 import { findPartRoots } from '@core/solver/resolveLeaves';
 import { parseSvg } from '@core/svg/parseSvg';
 
@@ -22,9 +27,9 @@ function band(supportTop: number, top: number): [number, number] {
 /** Element standing on the base plate (top `BASE_TO`) and reaching `top` in mm. */
 const onBase = (top: number): [number, number] => band(BASE_TO, top);
 
-function ranges(source: string): Record<string, [number, number]> {
+function ranges(source: string, options?: DistributeOptions): Record<string, [number, number]> {
   const document = parseSvg(source, { fileName: 'sample.svg', global: DEFAULT_GLOBAL_SETTINGS });
-  const settings = distributeLayers(document.root, {}, DEFAULT_GLOBAL_SETTINGS);
+  const settings = distributeLayers(document.root, {}, DEFAULT_GLOBAL_SETTINGS, options);
   const out: Record<string, [number, number]> = {};
   for (const id of findPartRoots(document.root, settings)) {
     out[id] = [settings[id]?.zFrom ?? NaN, settings[id]?.zTo ?? NaN];
@@ -107,6 +112,42 @@ describe('distributeLayers', () => {
     // `bridge` crosses both edges and is contained by neither: the lower one gives the bottom (minus the
     // sink), the higher one the top.
     expect(result.bridge).toEqual([result.low[1] - SINK_MM, result.high[1] + LAYER_MM]);
+  });
+
+  it('takes the layer height, the sink and the base heights from the options (ADR-0033)', () => {
+    const source =
+      '<svg viewBox="0 0 100 100"><g>' +
+      '<rect id="low" x="0" y="0" width="60" height="60"/>' +
+      '<rect id="high" x="40" y="40" width="60" height="60"/>' +
+      '</g></svg>';
+
+    const options: DistributeOptions = {
+      layerMm: 3,
+      sinkMm: 1.5,
+      supportShare: 0.02,
+      baseFrom: 2,
+      baseTo: 12,
+    };
+    const result = ranges(source, options);
+    // Nothing under the first shape: it stands on the heights from the dialog.
+    expect(result.low).toEqual([2, 12]);
+    expect(result.high).toEqual([12 - 1.5, 12 + 3]);
+  });
+
+  it('decides what counts as a support by the share from the options', () => {
+    // The upper square covers the narrow plate under it only along a fifth of its own footprint.
+    const source =
+      '<svg viewBox="0 0 100 100"><g>' +
+      '<rect id="plate" x="0" y="0" width="20" height="99"/>' +
+      '<rect id="big" x="0" y="0" width="99" height="99"/>' +
+      '</g></svg>';
+    // A strict threshold: a fifth is not half, so the plate is not a support and the square stands
+    // on the project base.
+    const strict = ranges(source, { layerMm: 5, sinkMm: 0.5, supportShare: 0.5 });
+    expect(strict.big).toEqual(base);
+    // The default threshold: it is, so the square is lifted onto the plate.
+    const normal = ranges(source);
+    expect(normal.big).toEqual(onBase(BASE_TO + LAYER_MM));
   });
 
   it('puts every later HTML5 shape above the ones it overlaps', () => {

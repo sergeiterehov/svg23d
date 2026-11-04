@@ -64,7 +64,7 @@ describe('distributeLayers with rasterised footprints', () => {
   it('rests a dot inside the hole of a ring on the background, not on the ring', () => {
     const result = ranges(RING_SVG);
     expect(result.bg).toEqual([0, 30]);
-    expect(result.ring).toEqual([29.5, 35]);
+    expect(result.ring).toEqual([30 - SINK_MM, 30 + LAYER_MM]);
     // The ring's box contains the dot, but there is no material under it: the dot stands on the
     // background instead of balancing on the stroke.
     expect(result.dot).toEqual([30 - SINK_MM, 30 + LAYER_MM]);
@@ -78,8 +78,8 @@ describe('distributeLayers with rasterised footprints', () => {
         '<rect id="bar" x="40" y="40" width="20" height="20"/>' +
         '</g></svg>',
     );
-    expect(result.block).toEqual([29.5, 35]);
-    // `bar` sits on the block: 35 − 0.5 … 35 + 5.
+    expect(result.block).toEqual([30 - SINK_MM, 30 + LAYER_MM]);
+    // `bar` sits on the block: 35 − SINK_MM … 35 + LAYER_MM.
     expect(result.bar).toEqual([35 - SINK_MM, 35 + LAYER_MM]);
   });
 });
