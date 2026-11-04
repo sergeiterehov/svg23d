@@ -137,6 +137,8 @@ export function ProjectMenu() {
                       autoFocus
                       value={draft}
                       aria-label="Имя проекта"
+                      // The whole name is selected, so typing replaces it instead of appending.
+                      onFocus={(event) => event.currentTarget.select()}
                       onChange={(event) => setDraft(event.target.value)}
                       onClick={(event) => event.stopPropagation()}
                       onDoubleClick={(event) => event.stopPropagation()}

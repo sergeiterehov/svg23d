@@ -458,6 +458,8 @@ function TreeRow({ node, depth, ui, anchorRef, onDrop }: TreeRowProps) {
             autoFocus
             defaultValue={node.name}
             aria-label="Имя элемента"
+            // The whole name is selected, so typing replaces it instead of appending.
+            onFocus={(event) => event.currentTarget.select()}
             className="min-w-0 flex-1 rounded border border-sky-500 bg-slate-950 px-1 py-0 text-xs text-white outline-none"
             onClick={(event) => event.stopPropagation()}
             onBlur={(event) => {
