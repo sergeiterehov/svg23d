@@ -61,10 +61,7 @@ export function computeDefaultPartRoots(root: SvgDocNode): Set<string> {
 }
 
 /** Ids of the nodes that start a printed part, in document order. */
-export function findPartRoots(
-  root: SvgDocNode,
-  settings: Record<string, NodeSettings>,
-): string[] {
+export function findPartRoots(root: SvgDocNode, settings: Record<string, NodeSettings>): string[] {
   const explicit = hasExplicitParts(root, settings);
   const defaults = explicit ? new Set<string>() : computeDefaultPartRoots(root);
   const result: string[] = [];
@@ -111,12 +108,7 @@ export function resolveLeaves(input: ResolveInput): ResolveResult {
     hidden: false,
   };
 
-  const walk = (
-    node: SvgDocNode,
-    inherited: Inherited,
-    partId: string,
-    partName: string,
-  ): void => {
+  const walk = (node: SvgDocNode, inherited: Inherited, partId: string, partName: string): void => {
     const own = settings[node.id] ?? {};
     const effective: Inherited = {
       zFrom: own.zFrom ?? inherited.zFrom,
@@ -143,10 +135,12 @@ export function resolveLeaves(input: ResolveInput): ResolveResult {
       if (contours.length === 0) return;
 
       if (!(effective.zTo > effective.zFrom)) {
+        // A zero-height band is allowed by the UI (the element just is not printed), so this is
+        // informational rather than an error.
         warnings.push({
           nodeId: node.id,
           code: 'empty-shape',
-          message: `Элемент «${node.name}» пропущен: высота «до» должна быть больше «от»`,
+          message: `Элемент «${node.name}» не напечатан: «до» (${effective.zTo}) не больше «от» (${effective.zFrom})`,
         });
         return;
       }

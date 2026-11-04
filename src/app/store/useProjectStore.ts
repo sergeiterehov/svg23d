@@ -20,6 +20,7 @@ import {
 } from '@core/model/project';
 import { parseSvg, SvgParseError } from '@core/svg/parseSvg';
 import { createEmptyDocument, createEmptyProject, isEmptyDocument } from '@core/model/empty';
+import { constrainGlobalPatch, constrainNodePatch } from '@core/model/limits';
 import { resolveLeaves, type PartInfo } from '@core/solver/resolveLeaves';
 import { findNode } from '@core/solver/resolveLeaves';
 import { effectiveSettingsFor } from '@core/solver/inheritance';
@@ -159,7 +160,7 @@ export const useProjectStore = create<AppState>()((set, get) => ({
     try {
       // Project defaults set before the import survive it: they describe the machine and the
       // material, not the document.
-      const global = { ...get().project?.global ?? DEFAULT_GLOBAL_SETTINGS };
+      const global = { ...(get().project?.global ?? DEFAULT_GLOBAL_SETTINGS) };
       const document = parseSvg(text, { fileName, global });
       const project: Project = {
         version: PROJECT_VERSION,
@@ -183,7 +184,9 @@ export const useProjectStore = create<AppState>()((set, get) => ({
       scheduleRebuild(set, get, 0);
     } catch (error) {
       const message =
-        error instanceof SvgParseError ? error.message : `Не удалось прочитать файл: ${String(error)}`;
+        error instanceof SvgParseError
+          ? error.message
+          : `Не удалось прочитать файл: ${String(error)}`;
       // Keep the current project: a broken file must not throw away the work in progress.
       set({ status: 'error', error: message });
     }
@@ -321,19 +324,7 @@ export const useProjectStore = create<AppState>()((set, get) => ({
     const { project } = get();
     if (!project || Object.keys(patches).length === 0) return;
     pushHistory(set, get, 'settings:batch');
-    const settings: Record<string, NodeSettings> = { ...project.settings };
-    for (const [nodeId, patch] of Object.entries(patches)) {
-      const next: NodeSettings = { ...(settings[nodeId] ?? {}) };
-      for (const [key, value] of Object.entries(patch) as Array<[keyof NodeSettings, unknown]>) {
-        if (value === undefined || value === null) {
-          delete next[key];
-        } else {
-          (next as Record<string, unknown>)[key] = value;
-        }
-      }
-      settings[nodeId] = next;
-    }
-    set({ project: { ...project, settings } });
+    set({ project: { ...project, settings: mergePatches(project, patches) } });
     scheduleRebuild(set, get, batchOptions?.immediate ? 0 : REBUILD_DEBOUNCE_MS);
   },
 
@@ -341,21 +332,7 @@ export const useProjectStore = create<AppState>()((set, get) => ({
     const { project } = get();
     if (!project) return;
     pushHistory(set, get, `${nodeId}:${Object.keys(patch).sort().join(',')}`);
-    const current = project.settings[nodeId] ?? {};
-    const next: NodeSettings = { ...current };
-    for (const [key, value] of Object.entries(patch) as Array<[keyof NodeSettings, unknown]>) {
-      if (value === undefined || value === null) {
-        delete next[key];
-      } else {
-        (next as Record<string, unknown>)[key] = value;
-      }
-    }
-    set({
-      project: {
-        ...project,
-        settings: { ...project.settings, [nodeId]: next },
-      },
-    });
+    set({ project: { ...project, settings: mergePatches(project, { [nodeId]: patch }) } });
     scheduleRebuild(set, get, REBUILD_DEBOUNCE_MS);
   },
 
@@ -363,7 +340,12 @@ export const useProjectStore = create<AppState>()((set, get) => ({
     const { project } = get();
     if (!project) return;
     pushHistory(set, get, `global:${Object.keys(patch).sort().join(',')}`);
-    set({ project: { ...project, global: { ...project.global, ...patch } } });
+    set({
+      project: {
+        ...project,
+        global: { ...project.global, ...constrainGlobalPatch(patch, project.global) },
+      },
+    });
     // Nothing to rebuild while the document is empty; the values apply to the next import.
     if (!isEmptyDocument(project.document)) scheduleRebuild(set, get, REBUILD_DEBOUNCE_MS);
   },
@@ -428,6 +410,35 @@ export const useProjectStore = create<AppState>()((set, get) => ({
 
 type SetState = (partial: Partial<AppState>) => void;
 type GetState = () => AppState;
+
+/** Applies per-node patches with the parameter limits, as one undo step. */
+function mergePatches(
+  project: Project,
+  patches: Record<string, NodeSettings>,
+): Record<string, NodeSettings> {
+  const settings: Record<string, NodeSettings> = { ...project.settings };
+  for (const [nodeId, patch] of Object.entries(patches)) {
+    const effective = effectiveSettingsFor(
+      project.document.root,
+      project.settings,
+      project.global,
+      nodeId,
+    );
+    const constrained = effective ? constrainNodePatch(patch, effective) : patch;
+    const next: NodeSettings = { ...(settings[nodeId] ?? {}) };
+    for (const [key, value] of Object.entries(constrained) as Array<
+      [keyof NodeSettings, unknown]
+    >) {
+      if (value === undefined || value === null) {
+        delete next[key];
+      } else {
+        (next as Record<string, unknown>)[key] = value;
+      }
+    }
+    settings[nodeId] = next;
+  }
+  return settings;
+}
 
 function pushHistory(set: SetState, get: GetState, key: string): void {
   const project = get().project;

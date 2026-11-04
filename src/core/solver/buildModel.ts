@@ -55,6 +55,9 @@ export function buildModel({ api, leaves }: BuildOptions): BuildOutput {
 
   const entries: Entry[] = [];
   for (const leaf of leaves) {
+    // Zero (or negative) thickness is allowed by the UI: such an element simply is not printed.
+    if (!(leaf.zTo - leaf.zFrom > 1e-6)) continue;
+
     const rawSection = sectionFromContours(api, leaf.contours, leaf.fillRule);
     const section = applyMask(api, rawSection, leaf.mask);
     if (rawSection !== section) rawSection.delete();
@@ -246,11 +249,7 @@ export function zOverlaps(a: ResolvedLeaf, b: ResolvedLeaf): boolean {
  * Applies an SVG mask (ADR-0015): the area is intersected with the "include" coverage and the
  * "exclude" coverage is removed. Reuses the same 2D boolean engine as the rest of the solver.
  */
-function applyMask(
-  api: ManifoldApi,
-  section: Section,
-  mask: ResolvedLeaf['mask'],
-): Section {
+function applyMask(api: ManifoldApi, section: Section, mask: ResolvedLeaf['mask']): Section {
   if (!mask || (mask.include.length === 0 && mask.exclude.length === 0)) return section;
 
   let result = section;

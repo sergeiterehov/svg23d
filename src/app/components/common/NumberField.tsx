@@ -14,6 +14,7 @@ interface NumberFieldProps {
   onDelta?: (delta: number) => void;
   step?: number;
   min?: number;
+  max?: number;
   suffix?: string;
   /** Explanation shown in the "?" tooltip. */
   hint?: string;
@@ -50,6 +51,7 @@ export function NumberField({
   onDelta,
   step = 0.1,
   min,
+  max,
   suffix = 'мм',
   hint,
   disabled,
@@ -66,6 +68,9 @@ export function NumberField({
 
   const displayed = draft ?? (value === undefined ? '' : String(round(value)));
 
+  const limit = (next: number): number =>
+    Math.min(max ?? Number.POSITIVE_INFINITY, Math.max(min ?? Number.NEGATIVE_INFINITY, next));
+
   const commit = (): void => {
     if (draft === null) return;
     const raw = draft.trim();
@@ -79,13 +84,13 @@ export function NumberField({
       if (onDelta) onDelta(delta);
       else {
         const absolute = parseNumber(raw);
-        if (absolute !== null) onCommit(Math.max(min ?? -Infinity, absolute));
+        if (absolute !== null) onCommit(limit(absolute));
       }
       return;
     }
     const absolute = parseNumber(raw);
     if (absolute === null) return;
-    onCommit(min !== undefined ? Math.max(min, absolute) : absolute);
+    onCommit(limit(absolute));
   };
 
   return (

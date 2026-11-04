@@ -1,14 +1,15 @@
 import { findNode, type PartInfo } from '@core/solver/resolveLeaves';
 import { effectiveSettingsFor } from '@core/solver/inheritance';
 import { collectSubtreeIds } from '@core/solver/selection';
-import type {
-  BBox3,
-  LeafStats,
-  NodeSettings,
-  ResolvedLeaf,
-  SvgDocNode,
-} from '@core/model/types';
+import type { BBox3, LeafStats, NodeSettings, ResolvedLeaf, SvgDocNode } from '@core/model/types';
 import { useProjectStore, type BuildResultState } from '../../store/useProjectStore';
+import {
+  MAX_CLEARANCE_MM,
+  MAX_SIZE_MM,
+  MIN_HEIGHT_MM,
+  MIN_SIZE_MM,
+  maxChamfer,
+} from '@core/model/limits';
 import { NumberField } from '../common/NumberField';
 import { ColorChip, MixedColorChip, Toggle } from '../common/Toggle';
 import { HelpHint } from '../common/Icon';
@@ -92,11 +93,10 @@ function ElementPanel({ node }: { node: SvgDocNode }) {
             placeholder={String(round(effective.zFrom))}
             showReset={own.zFrom !== undefined}
             step={0.2}
+            max={round(effective.zTo - MIN_HEIGHT_MM)}
             hint="Нижняя граница выдавливания."
             onCommit={(value) => updateSettings(node.id, { zFrom: value })}
-            onDelta={(delta) =>
-              updateSettings(node.id, { zFrom: round(effective.zFrom + delta) })
-            }
+            onDelta={(delta) => updateSettings(node.id, { zFrom: round(effective.zFrom + delta) })}
           />
           <NumberField
             label="Высота до"
@@ -104,14 +104,15 @@ function ElementPanel({ node }: { node: SvgDocNode }) {
             placeholder={String(round(effective.zTo))}
             showReset={own.zTo !== undefined}
             step={0.2}
-            hint="Верхняя граница выдавливания, должна быть больше нижней."
+            min={round(effective.zFrom + MIN_HEIGHT_MM)}
+            hint="Верхняя граница выдавливания: не меньше «высоты от»."
             onCommit={(value) => updateSettings(node.id, { zTo: value })}
             onDelta={(delta) => updateSettings(node.id, { zTo: round(effective.zTo + delta) })}
           />
         </div>
-        {!(effective.zTo > effective.zFrom) && (
+        {effective.zTo < effective.zFrom && (
           <p className="text-[11px] text-rose-400">
-            «До» должно быть больше «от», иначе элемент будет пропущен.
+            «До» меньше «от» — элемент не будет напечатан.
           </p>
         )}
 
@@ -122,6 +123,7 @@ function ElementPanel({ node }: { node: SvgDocNode }) {
           showReset={own.clearance !== undefined}
           step={0.05}
           min={0}
+          max={MAX_CLEARANCE_MM}
           hint="Действует на гнёзда, которые этот элемент вырезает в деталях НИЖЕ. Зазор на сторону: отверстие будет больше на 2× значения."
           onCommit={(value) => updateSettings(node.id, { clearance: value })}
           onDelta={(delta) =>
@@ -137,6 +139,7 @@ function ElementPanel({ node }: { node: SvgDocNode }) {
             showReset={own.chamferTop !== undefined}
             step={0.1}
             min={0}
+            max={maxChamfer(effective.zTo - effective.zFrom, effective.chamferBottom)}
             hint="Снятие фаски под 45° на верхней грани."
             onCommit={(value) => updateSettings(node.id, { chamferTop: value })}
             onDelta={(delta) =>
@@ -152,6 +155,7 @@ function ElementPanel({ node }: { node: SvgDocNode }) {
             showReset={own.chamferBottom !== undefined}
             step={0.1}
             min={0}
+            max={maxChamfer(effective.zTo - effective.zFrom, effective.chamferTop)}
             hint="Снятие фаски под 45° на нижней грани."
             onCommit={(value) => updateSettings(node.id, { chamferBottom: value })}
             onDelta={(delta) =>
@@ -306,6 +310,7 @@ function MultiPanel({ nodes }: { nodes: SvgDocNode[] }) {
           placeholder={clearance.placeholder}
           step={0.05}
           min={0}
+          max={MAX_CLEARANCE_MM}
           hint="Зазор на сторону в гнёздах этого элемента."
           onCommit={clearance.commit}
           onDelta={(delta) => clearance.delta(delta, 0)}
@@ -313,10 +318,10 @@ function MultiPanel({ nodes }: { nodes: SvgDocNode[] }) {
 
         {nodes.some((node) => {
           const settings = effectiveOf(node);
-          return settings ? settings.zTo <= settings.zFrom : false;
+          return settings ? settings.zTo < settings.zFrom : false;
         }) && (
           <p className="text-[11px] text-rose-400">
-            У части элементов «до» не больше «от» — они будут пропущены.
+            У части элементов «до» меньше «от» — они не будут напечатаны.
           </p>
         )}
 
@@ -327,7 +332,7 @@ function MultiPanel({ nodes }: { nodes: SvgDocNode[] }) {
             placeholder={chamferTop.placeholder}
             step={0.1}
             min={0}
-            hint="Снятие фаски под 45° на верхней грани."
+            hint="Снятие фаски под 45° на верхней грани (не больше половины высоты элемента)."
             onCommit={chamferTop.commit}
             onDelta={(delta) => chamferTop.delta(delta, 0)}
           />
@@ -337,7 +342,7 @@ function MultiPanel({ nodes }: { nodes: SvgDocNode[] }) {
             placeholder={chamferBottom.placeholder}
             step={0.1}
             min={0}
-            hint="Снятие фаски под 45° на нижней грани."
+            hint="Снятие фаски под 45° на нижней грани (не больше половины высоты элемента)."
             onCommit={chamferBottom.commit}
             onDelta={(delta) => chamferBottom.delta(delta, 0)}
           />
@@ -447,7 +452,8 @@ function ProjectPanel() {
             value={global.fitSizeMm}
             placeholder=""
             step={5}
-            min={1}
+            min={MIN_SIZE_MM}
+            max={MAX_SIZE_MM}
             hint="Ширина, высота или бо́льшая сторона модели в мм; пропорции сохраняются."
             onCommit={(value) => updateGlobal({ fitSizeMm: value ?? global.fitSizeMm })}
             onDelta={(delta) =>
@@ -563,9 +569,7 @@ function StatsPanel() {
   const selectedIds = useProjectStore((s) => s.selectedIds);
 
   const node =
-    project && selectedIds.length === 1
-      ? findNode(project.document.root, selectedIds[0])
-      : null;
+    project && selectedIds.length === 1 ? findNode(project.document.root, selectedIds[0]) : null;
 
   return (
     <section className="p-3">
@@ -579,10 +583,7 @@ function StatsPanel() {
         <>
           <dl className="mt-2 space-y-1 text-[11px]">
             <Row label="Деталей" value={String(result.stats.partCount)} />
-            <Row
-              label="Треугольников"
-              value={result.stats.triangleCount.toLocaleString('ru-RU')}
-            />
+            <Row label="Треугольников" value={result.stats.triangleCount.toLocaleString('ru-RU')} />
             <Row label="Объём" value={formatVolume(result.stats.volume)} />
             <Row label="Габариты" value={formatBox(result.stats.bbox)} />
             <Row label="Время" value={`${result.stats.durationMs} мс`} />
