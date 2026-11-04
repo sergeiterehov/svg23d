@@ -1,17 +1,22 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useProjectStore } from '../../store/useProjectStore';
 import { createViewer, type ViewerHandle } from '@viewer/createViewer';
+import { partIdForSelection } from '@core/solver/selection';
 
 export function Preview3D() {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<ViewerHandle | null>(null);
   const result = useProjectStore((s) => s.result);
   const select = useProjectStore((s) => s.select);
+  const selectedId = useProjectStore((s) => s.selectedId);
+  const leaves = useProjectStore((s) => s.leaves);
+  const project = useProjectStore((s) => s.project);
 
   useEffect(() => {
     if (!containerRef.current) return;
     const viewer = createViewer(containerRef.current, {
       onBackgroundClick: () => select(null),
+      onPartClick: (partId) => select(partId),
     });
     viewerRef.current = viewer;
     return () => {
@@ -23,6 +28,15 @@ export function Preview3D() {
   useEffect(() => {
     viewerRef.current?.setParts(result?.parts ?? []);
   }, [result]);
+
+  const selectedPartId = useMemo(
+    () => (project ? partIdForSelection(project.document.root, leaves, selectedId) : null),
+    [project, leaves, selectedId],
+  );
+
+  useEffect(() => {
+    viewerRef.current?.setSelectedPart(selectedPartId);
+  }, [selectedPartId, result]);
 
   return (
     <div className="relative h-full w-full">

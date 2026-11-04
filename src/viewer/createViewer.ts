@@ -1,9 +1,15 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { OutlinePass } from 'three/addons/postprocessing/OutlinePass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import type { PartMesh } from '@core/model/types';
 
 export interface ViewerHandle {
   setParts: (parts: PartMesh[]) => void;
+  /** Highlights one part with a light-blue outline; `null` clears the selection. */
+  setSelectedPart: (partId: string | null) => void;
   resetView: () => void;
   toggleWireframe: () => boolean;
   dispose: () => void;
@@ -12,6 +18,8 @@ export interface ViewerHandle {
 export interface ViewerOptions {
   /** Called when a click lands on empty space (no part under the cursor). */
   onBackgroundClick?: () => void;
+  /** Called when a click hits a part; argument is the part id (a tree node id). */
+  onPartClick?: (partId: string) => void;
 }
 
 /**
@@ -43,6 +51,25 @@ export function createViewer(container: HTMLElement, options: ViewerOptions = {}
   controls.dampingFactor = 0.08;
   controls.zoomSpeed = 0.9;
 
+  // Screen-space outline for the selected part (crisp at any zoom, unlike an inflated copy).
+  const composer = new EffectComposer(renderer);
+  composer.addPass(new RenderPass(scene, camera));
+  const outlinePass = new OutlinePass(
+    new THREE.Vector2(container.clientWidth || 1, container.clientHeight || 1),
+    scene,
+    camera,
+  );
+  outlinePass.edgeStrength = 6;
+  outlinePass.edgeGlow = 0.4;
+  outlinePass.edgeThickness = 2;
+  outlinePass.pulsePeriod = 0;
+  outlinePass.visibleEdgeColor.set('#7dd3fc');
+  outlinePass.hiddenEdgeColor.set('#0ea5e9');
+  composer.addPass(outlinePass);
+  composer.addPass(new OutputPass());
+
+  let selectedPartId: string | null = null;
+
   // Distinguish "click on empty space" from orbiting: only short, non-moving presses count.
   const raycaster = new THREE.Raycaster();
   const pointer = new THREE.Vector2();
@@ -67,7 +94,12 @@ export function createViewer(container: HTMLElement, options: ViewerOptions = {}
     );
     raycaster.setFromCamera(pointer, camera);
     const hits = raycaster.intersectObjects(partsGroup.children, false);
-    if (hits.length === 0) options.onBackgroundClick?.();
+    if (hits.length === 0) {
+      options.onBackgroundClick?.();
+      return;
+    }
+    const partId = hits[0].object.userData.partId as string | undefined;
+    if (partId) options.onPartClick?.(partId);
   };
 
   canvas.addEventListener('pointerdown', handlePointerDown);
@@ -142,6 +174,7 @@ export function createViewer(container: HTMLElement, options: ViewerOptions = {}
     const width = container.clientWidth || 1;
     const height = container.clientHeight || 1;
     renderer.setSize(width, height, false);
+    composer.setSize(width, height);
     canvas.style.width = '100%';
     canvas.style.height = '100%';
     camera.aspect = width / height;
@@ -153,8 +186,15 @@ export function createViewer(container: HTMLElement, options: ViewerOptions = {}
 
   renderer.setAnimationLoop(() => {
     controls.update();
-    renderer.render(scene, camera);
+    composer.render();
   });
+
+  const applySelection = (): void => {
+    const mesh = partsGroup.children.find(
+      (child) => (child.userData.partId as string | undefined) === selectedPartId,
+    );
+    outlinePass.selectedObjects = mesh ? [mesh] : [];
+  };
 
   return {
     setParts(parts) {
@@ -177,6 +217,7 @@ export function createViewer(container: HTMLElement, options: ViewerOptions = {}
 
         const mesh = new THREE.Mesh(geometry, material);
         mesh.name = part.name;
+        mesh.userData.partId = part.partId;
         partsGroup.add(mesh);
         geometries.push(geometry);
         materials.push(material);
@@ -188,6 +229,11 @@ export function createViewer(container: HTMLElement, options: ViewerOptions = {}
       }
       updateGrid(extent * 1.4);
       frameAll();
+      applySelection();
+    },
+    setSelectedPart(partId) {
+      selectedPartId = partId;
+      applySelection();
     },
     resetView() {
       frameAll();
@@ -203,6 +249,8 @@ export function createViewer(container: HTMLElement, options: ViewerOptions = {}
       canvas.removeEventListener('pointerup', handlePointerUp);
       renderer.setAnimationLoop(null);
       disposeParts();
+      outlinePass.selectedObjects = [];
+      composer.dispose();
       controls.dispose();
       renderer.dispose();
       canvas.remove();
