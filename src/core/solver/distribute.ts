@@ -1,32 +1,27 @@
 import type { BBox, GlobalSettings, NodeSettings, SvgDocNode } from '../model/types';
+import { createGrid, fillBox, rasterizeSubtree } from './footprint';
 import { findNode, findPartRoots } from './resolveLeaves';
 
 /**
- * "Разложить по слоям": turns the cut order into a physical stack (see ADR-0018).
+ * "Разложить по слоям": turns the cut order into a physical stack (see ADR-0018, ADR-0025).
  *
- * The height of an element is **derived from the parts visible under it** (a shared area in the top
- * view, the layer below is what paints it): its bottom is the **top** of the lowest of them sunk by
- * `SINK_MM` into it, and its top is `LAYER_MM` above the highest of them. So an element always stands on
- * what is beneath it, bites into it instead of resting on a zero-thickness contact, and ends above
- * everything it overlaps (a trunk crossed by crowns stays underneath them).
+ * The height of an element is **derived from the parts visible under it**: the top view is rasterised,
+ * every part remembers which cells it painted, and a part only counts the parts it actually covers. So
+ * a trunk drawn inside the hill stands on the hill and not on the sky behind it, a crown sticking out
+ * above the hill still reaches down to the sky, and a dot inside the counter of a letter rests on the
+ * background instead of balancing on a thin stroke.
  *
- * A part painted over another one hides it: a trunk drawn inside the hill stands on the hill and not on
- * the sky behind it, while a crown that sticks out above the hill still reaches down to the sky.
- *
- * Without a support an element takes the project defaults — so nothing hangs in the air.
+ * Its bottom is the **top** of the lowest of them sunk by `SINK_MM` into it, its top is `LAYER_MM`
+ * above the highest of them. Without anything beneath, the element takes the project defaults — so
+ * nothing hangs in the air.
  */
 export const LAYER_MM = 5;
 /** How deep a part bites into the one under it, so the two always share volume. */
 export const SINK_MM = 0.5;
+/** A support has to cover this share of the part's footprint: one stray cell is not a support. */
+const SUPPORT_SHARE = 0.02;
 
-interface MutableBox {
-  minX: number;
-  minY: number;
-  maxX: number;
-  maxY: number;
-}
-
-function collectBox(node: SvgDocNode, box: MutableBox): void {
+function collectBox(node: SvgDocNode, box: BBox): void {
   if (node.bbox) {
     box.minX = Math.min(box.minX, node.bbox.minX);
     box.minY = Math.min(box.minY, node.bbox.minY);
@@ -38,24 +33,10 @@ function collectBox(node: SvgDocNode, box: MutableBox): void {
 
 /** XY footprint of a node and all its descendants, in SVG user units. */
 export function subtreeBox(node: SvgDocNode): BBox | null {
-  const box: MutableBox = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
+  const box: BBox = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
   collectBox(node, box);
   if (!Number.isFinite(box.minX) || !Number.isFinite(box.minY)) return null;
   return box;
-}
-
-function boxesOverlap(a: BBox, b: BBox): boolean {
-  return a.minX < b.maxX && b.minX < a.maxX && a.minY < b.maxY && b.minY < a.maxY;
-}
-
-/** `outer` fully covers `inner` in the top view. */
-function boxContains(outer: BBox, inner: BBox): boolean {
-  return (
-    outer.minX <= inner.minX &&
-    outer.minY <= inner.minY &&
-    outer.maxX >= inner.maxX &&
-    outer.maxY >= inner.maxY
-  );
 }
 
 function round(value: number): number {
@@ -69,39 +50,72 @@ export function distributeLayers(
   global: GlobalSettings,
 ): Record<string, NodeSettings> {
   const next: Record<string, NodeSettings> = { ...settings };
-  const placed: Array<{ zFrom: number; zTo: number; box: BBox | null }> = [];
+  const ids = findPartRoots(root, settings);
+  const nodes = ids.map((id) => findNode(root, id));
+  const boxes = nodes.map((node) => (node ? subtreeBox(node) : null));
+
+  const area: BBox = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
+  for (const box of boxes) {
+    if (!box) continue;
+    area.minX = Math.min(area.minX, box.minX);
+    area.minY = Math.min(area.minY, box.minY);
+    area.maxX = Math.max(area.maxX, box.maxX);
+    area.maxY = Math.max(area.maxY, box.maxY);
+  }
+  if (!Number.isFinite(area.minX)) return next;
+
+  const grid = createGrid(area);
+  const cells = grid.cols * grid.rows;
+  /** Part index that painted each cell last — what is visible there. */
+  const owners = new Int16Array(cells).fill(-1);
+  const mask = new Uint8Array(cells);
+  const scratch = new Uint8Array(cells);
+  const placed: Array<{ zFrom: number; zTo: number }> = [];
 
   // Paint order: the first part is drawn first, so it is the bottom of the stack.
-  for (const id of findPartRoots(root, settings)) {
-    const node = findNode(root, id);
-    const box = node ? subtreeBox(node) : null;
-    const below = box ? placed.filter((item) => item.box && boxesOverlap(item.box, box)) : [];
-    // Only the layers actually visible under this one count. A part fully covered by a later part — the
-    // sky behind the hill, with a trunk drawn inside the hill — is not what the element stands on.
-    const visible = below.filter(
-      (_, index) =>
-        !below.some(
-          (later, laterIndex) =>
-            laterIndex > index && later.box !== null && box !== null && boxContains(later.box, box),
-        ),
-    );
-    const resting = visible.length > 0 ? visible : below;
+  ids.forEach((id, index) => {
+    const node = nodes[index];
+    const box = boxes[index];
+    mask.fill(0);
+    if (node) rasterizeSubtree(node, grid, mask, scratch);
+    let covered = 0;
+    for (let cell = 0; cell < cells; cell += 1) if (mask[cell] !== 0) covered += 1;
+    if (covered === 0 && box) {
+      // Too thin for the grid to hit: its own box is the best available answer.
+      fillBox(box, grid, mask);
+      covered = 0;
+      for (let cell = 0; cell < cells; cell += 1) if (mask[cell] !== 0) covered += 1;
+    }
+
+    const counts = new Map<number, number>();
+    for (let cell = 0; cell < cells; cell += 1) {
+      if (mask[cell] === 0) continue;
+      const owner = owners[cell] as number;
+      if (owner < 0) continue;
+      counts.set(owner, (counts.get(owner) ?? 0) + 1);
+    }
+    const threshold = Math.max(1, Math.round(covered * SUPPORT_SHARE));
+    const supports = [...counts.entries()]
+      .filter(([, share]) => share >= threshold)
+      .map(([owner]) => placed[owner])
+      .filter((item): item is { zFrom: number; zTo: number } => item !== undefined);
 
     let zFrom: number;
     let zTo: number;
-    if (resting.length === 0) {
+    if (supports.length === 0) {
       zFrom = round(global.defaultZFrom);
       zTo = round(global.defaultZTo);
     } else {
       // Bottom = top of the lowest part under this one (sunk by half a millimetre), top = 5 mm above
       // the highest one.
-      zFrom = round(Math.min(...resting.map((item) => item.zTo)) - SINK_MM);
-      zTo = round(Math.max(...resting.map((item) => item.zTo)) + LAYER_MM);
+      zFrom = round(Math.min(...supports.map((item) => item.zTo)) - SINK_MM);
+      zTo = round(Math.max(...supports.map((item) => item.zTo)) + LAYER_MM);
     }
 
-    placed.push({ zFrom, zTo, box });
+    placed.push({ zFrom, zTo });
+    for (let cell = 0; cell < cells; cell += 1) if (mask[cell] !== 0) owners[cell] = index;
     next[id] = { ...(next[id] ?? {}), zFrom, zTo };
-  }
+  });
 
   return next;
 }
