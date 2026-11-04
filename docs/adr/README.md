@@ -22,3 +22,4 @@
 | [0013](0013-project-file-format.md) | Формат файла проекта `.svg23d.json` | Accepted |
 | [0014](0014-stroke-to-geometry.md) | Обводка (stroke) → отдельный элемент геометрии | Accepted |
 | [0015](0015-mask-support.md) | Маски (`mask`) как 2D-вычитание в солвере | Accepted |
+| [0016](0016-preview-rendering.md) | Рендеринг предпросмотра: плоские нормали и пресеты вида | Accepted |

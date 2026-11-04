@@ -96,6 +96,17 @@ export interface NodeSettings {
   childOrder?: string[];
 }
 
+export type ViewLighting = 'studio' | 'top' | 'flat';
+export type ViewMaterial = 'matte' | 'glossy';
+
+/** Display preferences; they never affect geometry. */
+export interface ViewSettings {
+  /** 2D preview: paint every element fully opaque. */
+  opaque2d: boolean;
+  lighting: ViewLighting;
+  material: ViewMaterial;
+}
+
 export interface GlobalSettings {
   /** Target extent of the model along the fitted axis, in mm. */
   fitSizeMm: number;
@@ -108,6 +119,7 @@ export interface GlobalSettings {
   defaultChamferBottom: number;
   /** Curve flattening tolerance in mm. Smaller = more triangles. */
   flatness: number;
+  view: ViewSettings;
 }
 
 export const PROJECT_VERSION = 1;

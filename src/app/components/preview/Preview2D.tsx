@@ -30,6 +30,7 @@ export function Preview2D() {
   const hoveredId = useProjectStore((s) => s.hoveredId);
   const select = useProjectStore((s) => s.select);
   const hover = useProjectStore((s) => s.hover);
+  const opaque = useProjectStore((s) => s.project?.global.view.opaque2d ?? false);
 
   if (!project) {
     return <div className="grid h-full place-items-center text-sm text-slate-500">Нет модели</div>;
@@ -73,7 +74,7 @@ export function Preview2D() {
               d={contoursToPathData(node.subpaths)}
               fill={node.fill === 'none' ? '#000000' : node.fill}
               fillRule={node.fillRule}
-              opacity={node.hidden ? 0.12 : active ? 0.95 : 0.8}
+              opacity={node.hidden ? 0.12 : opaque ? 1 : active ? 0.95 : 0.8}
               stroke={active && simple ? '#0ea5e9' : simple ? '#0f172a' : 'none'}
               strokeWidth={active ? strokeActive : strokeNormal}
               strokeLinejoin="round"

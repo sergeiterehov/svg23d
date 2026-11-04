@@ -9,6 +9,11 @@ export const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
   defaultChamferTop: 0,
   defaultChamferBottom: 0,
   flatness: 0.02,
+  view: {
+    opaque2d: false,
+    lighting: 'studio',
+    material: 'matte',
+  },
 };
 
 /** Vertical step used to tessellate a 45° chamfer (see ADR-0007). */

@@ -4,12 +4,21 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { OutlinePass } from 'three/addons/postprocessing/OutlinePass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import type { PartMesh } from '@core/model/types';
+import type { PartMesh, ViewLighting, ViewMaterial } from '@core/model/types';
+
+export interface ViewOptions {
+  material: ViewMaterial;
+  lighting: ViewLighting;
+}
+
+export const DEFAULT_VIEW: ViewOptions = { material: 'matte', lighting: 'studio' };
 
 export interface ViewerHandle {
   setParts: (parts: PartMesh[]) => void;
   /** Highlights one part with a light-blue outline; `null` clears the selection. */
   setSelectedPart: (partId: string | null) => void;
+  /** Material/lighting presets; does not rebuild geometry. */
+  setView: (view: ViewOptions) => void;
   resetView: () => void;
   toggleWireframe: () => boolean;
   dispose: () => void;
@@ -20,6 +29,7 @@ export interface ViewerOptions {
   onBackgroundClick?: () => void;
   /** Called when a click hits a part; argument is the part id (a tree node id). */
   onPartClick?: (partId: string) => void;
+  view?: ViewOptions;
 }
 
 /**
@@ -116,6 +126,48 @@ export function createViewer(container: HTMLElement, options: ViewerOptions = {}
   fillLight.position.set(-1.5, 1, 0.6);
   scene.add(fillLight);
 
+  /**
+   * Lighting presets:
+   * - studio: key + fill + ambient, shows volume and relief;
+   * - top: mostly from above, similar to a slicer preview;
+   * - flat: almost no directional light, uniform colours for checking silhouettes.
+   */
+  const applyLighting = (lighting: ViewLighting): void => {
+    if (lighting === 'top') {
+      ambient.intensity = 0.6;
+      hemisphere.intensity = 0.5;
+      keyLight.position.set(0.15, -0.2, 1);
+      keyLight.intensity = 1.7;
+      fillLight.position.set(-0.6, 0.5, 0.5);
+      fillLight.intensity = 0.3;
+      return;
+    }
+    if (lighting === 'flat') {
+      ambient.intensity = 1.25;
+      hemisphere.intensity = 0;
+      keyLight.intensity = 0;
+      fillLight.intensity = 0;
+      return;
+    }
+    ambient.intensity = 0.35;
+    hemisphere.intensity = 0.9;
+    keyLight.position.set(1, -1.2, 2);
+    keyLight.intensity = 1.5;
+    fillLight.position.set(-1.5, 1, 0.6);
+    fillLight.intensity = 0.45;
+  };
+
+  const materialParams = (material: ViewMaterial): {
+    roughness: number;
+    metalness: number;
+  } =>
+    material === 'glossy'
+      ? { roughness: 0.12, metalness: 0.05 }
+      : { roughness: 0.85, metalness: 0 };
+
+  let currentView: ViewOptions = options.view ?? DEFAULT_VIEW;
+  applyLighting(currentView.lighting);
+
   let grid: THREE.GridHelper | null = null;
   const partsGroup = new THREE.Group();
   scene.add(partsGroup);
@@ -207,12 +259,13 @@ export function createViewer(container: HTMLElement, options: ViewerOptions = {}
         geometry.computeVertexNormals();
         geometry.computeBoundingBox();
 
+        // Flat normals: averaged normals across the 90° edges of an extrusion smear shading over
+        // long side walls and make the triangle split visible (the taller the element, the worse).
         const material = new THREE.MeshStandardMaterial({
           color: new THREE.Color(part.color === 'none' ? '#cccccc' : part.color),
-          roughness: 0.6,
-          metalness: 0.05,
+          ...materialParams(currentView.material),
           wireframe,
-          flatShading: false,
+          flatShading: true,
         });
 
         const mesh = new THREE.Mesh(geometry, material);
@@ -234,6 +287,16 @@ export function createViewer(container: HTMLElement, options: ViewerOptions = {}
     setSelectedPart(partId) {
       selectedPartId = partId;
       applySelection();
+    },
+    setView(view) {
+      currentView = view;
+      applyLighting(view.lighting);
+      const params = materialParams(view.material);
+      for (const material of materials) {
+        material.roughness = params.roughness;
+        material.metalness = params.metalness;
+        material.needsUpdate = true;
+      }
     },
     resetView() {
       frameAll();

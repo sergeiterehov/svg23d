@@ -1,5 +1,6 @@
 import type { GlobalSettings, NodeSettings, Project } from './types';
 import { PROJECT_VERSION } from './types';
+import { DEFAULT_GLOBAL_SETTINGS } from './defaults';
 
 /**
  * Project file (`*.svg23d.json`): the source SVG plus user settings.
@@ -64,7 +65,17 @@ export function parseProjectFile(text: string): ProjectFile {
     version: candidate.version,
     fileName: candidate.fileName ?? 'project.svg',
     source: candidate.source,
-    global: candidate.global as GlobalSettings,
+    global: mergeGlobal(candidate.global as Partial<GlobalSettings>),
     settings: (candidate.settings ?? {}) as Record<string, NodeSettings>,
+  };
+}
+
+/** Fills in settings that older project files did not have (e.g. the `view` block). */
+function mergeGlobal(raw: Partial<GlobalSettings> | undefined): GlobalSettings {
+  const base = DEFAULT_GLOBAL_SETTINGS;
+  return {
+    ...base,
+    ...raw,
+    view: { ...base.view, ...(raw?.view ?? {}) },
   };
 }

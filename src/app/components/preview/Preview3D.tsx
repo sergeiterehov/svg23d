@@ -11,6 +11,8 @@ export function Preview3D() {
   const selectedId = useProjectStore((s) => s.selectedId);
   const leaves = useProjectStore((s) => s.leaves);
   const project = useProjectStore((s) => s.project);
+  const material = useProjectStore((s) => s.project?.global.view.material ?? 'matte');
+  const lighting = useProjectStore((s) => s.project?.global.view.lighting ?? 'studio');
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -37,6 +39,10 @@ export function Preview3D() {
   useEffect(() => {
     viewerRef.current?.setSelectedPart(selectedPartId);
   }, [selectedPartId, result]);
+
+  useEffect(() => {
+    viewerRef.current?.setView({ material, lighting });
+  }, [material, lighting]);
 
   return (
     <div className="relative h-full w-full">

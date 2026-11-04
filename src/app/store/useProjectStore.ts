@@ -10,6 +10,7 @@ import {
   type PartMesh,
   type Project,
   type ResolvedLeaf,
+  type ViewSettings,
 } from '@core/model/types';
 import {
   PROJECT_FILE_EXTENSION,
@@ -92,6 +93,8 @@ interface AppState {
   distributeZ: () => void;
   updateSettings: (nodeId: string, patch: NodeSettings) => void;
   updateGlobal: (patch: Partial<GlobalSettings>) => void;
+  /** Display-only settings: never schedule a rebuild. */
+  updateView: (patch: Partial<ViewSettings>) => void;
   select: (nodeId: string | null) => void;
   hover: (nodeId: string | null) => void;
   setViewMode: (mode: ViewMode) => void;
@@ -285,6 +288,18 @@ export const useProjectStore = create<AppState>()((set, get) => ({
     pushHistory(set, get, `global:${Object.keys(patch).sort().join(',')}`);
     set({ project: { ...project, global: { ...project.global, ...patch } } });
     scheduleRebuild(set, get, REBUILD_DEBOUNCE_MS);
+  },
+
+  updateView: (patch) => {
+    const { project } = get();
+    if (!project) return;
+    pushHistory(set, get, `view:${Object.keys(patch).sort().join(',')}`);
+    set({
+      project: {
+        ...project,
+        global: { ...project.global, view: { ...project.global.view, ...patch } },
+      },
+    });
   },
 
   select: (nodeId) => set({ selectedId: nodeId }),

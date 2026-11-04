@@ -58,6 +58,39 @@ describe('project file', () => {
     expect(after.widthMm).toBeCloseTo(before.widthMm, 6);
   });
 
+  it('keeps display settings', () => {
+    const project = makeProject();
+    project.global = {
+      ...project.global,
+      view: { opaque2d: true, lighting: 'flat', material: 'glossy' },
+    };
+    const file = parseProjectFile(serializeProject(project));
+    expect(file.global.view).toEqual({ opaque2d: true, lighting: 'flat', material: 'glossy' });
+  });
+
+  it('fills in view settings missing from older files', () => {
+    const legacy = {
+      app: 'svg23d',
+      version: 1,
+      fileName: 'old.svg',
+      source: '<svg viewBox="0 0 10 10"><rect width="10" height="10"/></svg>',
+      settings: {},
+      global: {
+        fitSizeMm: 50,
+        fit: 'width',
+        defaultZFrom: 0,
+        defaultZTo: 5,
+        defaultClearance: 0.1,
+        defaultChamferTop: 0,
+        defaultChamferBottom: 0,
+        flatness: 0.02,
+      },
+    };
+    const file = parseProjectFile(JSON.stringify(legacy));
+    expect(file.global.fitSizeMm).toBe(50);
+    expect(file.global.view).toEqual(DEFAULT_GLOBAL_SETTINGS.view);
+  });
+
   it('rejects foreign or broken files', () => {
     expect(() => parseProjectFile('not json')).toThrow(/повреждён/);
     expect(() => parseProjectFile('{"app":"other"}')).toThrow(/не файл проекта/);
