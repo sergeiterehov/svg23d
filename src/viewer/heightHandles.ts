@@ -1,22 +1,29 @@
 import * as THREE from 'three';
 
 /**
- * 3D arrows attached to the model: the upper one raises «до», the lower one lowers «от».
- * They are part of the scene (not HTML buttons), so they live in the same space as the model and
- * stay next to the geometry they affect (see ADR-0020).
+ * 3D arrows attached to the **selected** elements: the upper one sits on the selection's «до»,
+ * the lower one on its «от». Nothing selected → no arrows.
+ *
+ * Their Z comes from the selection's height band (not from the mesh bounds), so values typed in
+ * the inspector, the drag and the rebuilt model all stay in sync (see ADR-0020).
  */
 
 export type HeightHandleSide = 'top' | 'bottom';
 
+export interface HeightRange {
+  top: number;
+  bottom: number;
+}
+
 export interface HeightHandles {
   group: THREE.Group;
-  /** Places the arrows above/below the given model bounds and scales them to it. */
+  /** Model bounds: XY centre of the arrows and their size. */
   update: (bounds: THREE.Box3) => void;
+  /** Height band the arrows straddle; `null` hides them (nothing selected). */
+  setRange: (range: HeightRange | null) => void;
   /** Which arrow the ray hits, if any. The raycaster must already be set from the camera. */
   hit: (raycaster: THREE.Raycaster) => HeightHandleSide | null;
   setHovered: (side: HeightHandleSide | null) => void;
-  /** Moves the dragged arrow along Z without waiting for the model to rebuild. */
-  setDragOffset: (side: HeightHandleSide | null, offsetMm: number) => void;
   dispose: () => void;
 }
 
@@ -66,15 +73,21 @@ export function createHeightHandles(): HeightHandles {
   down.group.rotation.x = Math.PI;
   group.add(up.group, down.group);
 
+  const center = new THREE.Vector3();
   let size = 10;
-  let topZ = 0;
-  let bottomZ = 0;
-  let dragSide: HeightHandleSide | null = null;
-  let dragOffset = 0;
+  let hasModel = false;
+  let range: HeightRange | null = null;
 
-  const applyPositions = (): void => {
-    up.group.position.z = topZ + (dragSide === 'top' ? dragOffset : 0);
-    down.group.position.z = bottomZ + (dragSide === 'bottom' ? dragOffset : 0);
+  const apply = (): void => {
+    const band = range;
+    group.visible = hasModel && band !== null;
+    if (!band) return;
+    const gap = size * 0.1;
+    group.position.set(center.x, center.y, 0);
+    up.group.position.set(0, 0, band.top + gap);
+    up.group.scale.setScalar(size);
+    down.group.position.set(0, 0, band.bottom - gap);
+    down.group.scale.setScalar(size);
   };
 
   const setHovered = (side: HeightHandleSide | null): void => {
@@ -85,23 +98,20 @@ export function createHeightHandles(): HeightHandles {
   return {
     group,
     update(bounds) {
-      if (bounds.isEmpty()) {
+      hasModel = !bounds.isEmpty();
+      if (!hasModel) {
         group.visible = false;
         return;
       }
+      bounds.getCenter(center);
       const extent = bounds.getSize(new THREE.Vector3());
       // Prominent enough to grab, but never dominating the model.
       size = THREE.MathUtils.clamp(Math.max(extent.x, extent.y, extent.z) * 0.22, 6, 48);
-      const gap = size * 0.1;
-      const center = bounds.getCenter(new THREE.Vector3());
-
-      group.visible = true;
-      group.position.set(center.x, center.y, 0);
-      topZ = bounds.max.z + gap;
-      bottomZ = bounds.min.z - gap;
-      up.group.scale.setScalar(size);
-      down.group.scale.setScalar(size);
-      applyPositions();
+      apply();
+    },
+    setRange(next) {
+      range = next;
+      apply();
     },
     hit(raycaster) {
       if (!group.visible) return null;
@@ -110,11 +120,6 @@ export function createHeightHandles(): HeightHandles {
       return raycaster.intersectObject(down.group, true).length > 0 ? 'bottom' : null;
     },
     setHovered,
-    setDragOffset(side, offsetMm) {
-      dragSide = side;
-      dragOffset = offsetMm;
-      applyPositions();
-    },
     dispose() {
       for (const arrow of [up, down]) {
         for (const geometry of arrow.geometries) geometry.dispose();

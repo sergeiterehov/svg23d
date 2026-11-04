@@ -6,7 +6,7 @@ import { OutlinePass } from 'three/addons/postprocessing/OutlinePass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import type { PartMesh, ViewLighting, ViewMaterial, ViewProjection } from '@core/model/types';
 import { createNavCube, type NavCubeHandle } from './navCube';
-import { createHeightHandles, type HeightHandleSide } from './heightHandles';
+import { createHeightHandles, type HeightHandleSide, type HeightRange } from './heightHandles';
 
 export interface ViewOptions {
   material: ViewMaterial;
@@ -29,6 +29,8 @@ export interface ViewerHandle {
   setParts: (parts: PartMesh[], options?: { frame?: boolean }) => void;
   /** Highlights the given parts with a light-blue outline. */
   setSelectedParts: (partIds: string[]) => void;
+  /** Height band of the selection: the arrows sit on its top/bottom; `null` hides them. */
+  setHeightRange: (range: HeightRange | null) => void;
   /** Material/lighting/projection presets; does not rebuild geometry. */
   setView: (view: ViewOptions) => void;
   /** Mounts the orientation cube; returns a detach function. */
@@ -168,7 +170,6 @@ export function createViewer(container: HTMLElement, options: ViewerOptions = {}
     if (!heightDrag) return false;
     const side = heightDrag.side;
     heightDrag = null;
-    handles.setDragOffset(null, 0);
     controls.enabled = true;
     canvas.style.cursor = '';
     if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
@@ -201,7 +202,6 @@ export function createViewer(container: HTMLElement, options: ViewerOptions = {}
       const snapped = Math.round(raw / step) * step;
       if (snapped !== heightDrag.applied) {
         heightDrag.applied = snapped;
-        handles.setDragOffset(heightDrag.side, snapped);
         options.onHeightDrag?.(heightDrag.side, snapped);
       }
       return;
@@ -509,6 +509,9 @@ export function createViewer(container: HTMLElement, options: ViewerOptions = {}
     setSelectedParts(partIds) {
       selectedPartIds = partIds;
       applySelection();
+    },
+    setHeightRange(range) {
+      handles.setRange(range);
     },
     setView(view) {
       currentView = view;

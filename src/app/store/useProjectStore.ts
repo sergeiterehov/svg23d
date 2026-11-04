@@ -115,9 +115,12 @@ interface AppState {
   distributeZ: () => void;
   updateSettings: (nodeId: string, patch: NodeSettings) => void;
   /** Applies per-node patches as one undo step (multi-selection editing). */
-  updateSettingsBatch: (patches: Record<string, NodeSettings>) => void;
-  /** Preview arrows: shift «от»/«до» of the selection, or of the project defaults when nothing is selected. */
-  nudgeHeight: (key: 'zFrom' | 'zTo', delta: number) => void;
+  updateSettingsBatch: (
+    patches: Record<string, NodeSettings>,
+    options?: { immediate?: boolean },
+  ) => void;
+  /** Height arrows: shift «от»/«до» of the selection by `delta`; `immediate` skips the rebuild debounce. */
+  nudgeHeight: (key: 'zFrom' | 'zTo', delta: number, immediate?: boolean) => void;
   updateGlobal: (patch: Partial<GlobalSettings>) => void;
   /** Display-only settings: never schedule a rebuild. */
   updateView: (patch: Partial<ViewSettings>) => void;
@@ -288,22 +291,14 @@ export const useProjectStore = create<AppState>()((set, get) => ({
     scheduleRebuild(set, get, 0);
   },
 
-  nudgeHeight: (key, delta) => {
+  nudgeHeight: (key, delta, immediate = false) => {
     const { project, selectedIds } = get();
     if (!project) return;
     const nodes = selectedIds
       .map((id) => findNode(project.document.root, id))
       .filter((node): node is NonNullable<typeof node> => node !== null);
-
-    // Nothing selected → the arrows edit the project defaults, which is what a new import uses.
-    if (nodes.length === 0) {
-      if (key === 'zFrom') {
-        get().updateGlobal({ defaultZFrom: roundToStep(project.global.defaultZFrom + delta) });
-      } else {
-        get().updateGlobal({ defaultZTo: roundToStep(project.global.defaultZTo + delta) });
-      }
-      return;
-    }
+    // The arrows only exist while something is selected.
+    if (nodes.length === 0) return;
 
     const patches: Record<string, NodeSettings> = {};
     for (const node of nodes) {
@@ -316,10 +311,10 @@ export const useProjectStore = create<AppState>()((set, get) => ({
       if (!effective) continue;
       patches[node.id] = { [key]: roundToStep(effective[key] + delta) };
     }
-    get().updateSettingsBatch(patches);
+    get().updateSettingsBatch(patches, { immediate });
   },
 
-  updateSettingsBatch: (patches) => {
+  updateSettingsBatch: (patches, batchOptions) => {
     const { project } = get();
     if (!project || Object.keys(patches).length === 0) return;
     pushHistory(set, get, 'settings:batch');
@@ -336,7 +331,7 @@ export const useProjectStore = create<AppState>()((set, get) => ({
       settings[nodeId] = next;
     }
     set({ project: { ...project, settings } });
-    scheduleRebuild(set, get, REBUILD_DEBOUNCE_MS);
+    scheduleRebuild(set, get, batchOptions?.immediate ? 0 : REBUILD_DEBOUNCE_MS);
   },
 
   updateSettings: (nodeId, patch) => {

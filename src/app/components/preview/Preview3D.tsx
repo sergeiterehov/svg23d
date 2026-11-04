@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import { useProjectStore, HEIGHT_STEP_MM } from '../../store/useProjectStore';
 import { createViewer, type ViewerHandle } from '@viewer/createViewer';
 import { partIdForSelection } from '@core/solver/selection';
+import { effectiveSettingsFor } from '@core/solver/inheritance';
 
 export function Preview3D() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -38,7 +39,8 @@ export function Preview3D() {
         const diff = deltaMm - drag.applied;
         if (diff === 0) return;
         drag.applied = deltaMm;
-        useProjectStore.getState().nudgeHeight(side === 'top' ? 'zTo' : 'zFrom', diff);
+        // Immediate rebuild: the model follows the arrow while it is being dragged.
+        useProjectStore.getState().nudgeHeight(side === 'top' ? 'zTo' : 'zFrom', diff, true);
       },
       onHeightDragEnd: () => {
         heightDragRef.current = null;
@@ -70,6 +72,25 @@ export function Preview3D() {
   useEffect(() => {
     viewerRef.current?.setSelectedParts(selectedPartIds);
   }, [selectedPartIds, result]);
+
+  // The arrows straddle the selection's own height band; with nothing selected they disappear.
+  const heightRange = useMemo(() => {
+    if (!project || selectedIds.length === 0) return null;
+    const ranges = selectedIds
+      .map((id) =>
+        effectiveSettingsFor(project.document.root, project.settings, project.global, id),
+      )
+      .filter((settings): settings is NonNullable<typeof settings> => settings !== null);
+    if (ranges.length === 0) return null;
+    return {
+      top: Math.max(...ranges.map((settings) => settings.zTo)),
+      bottom: Math.min(...ranges.map((settings) => settings.zFrom)),
+    };
+  }, [project, selectedIds]);
+
+  useEffect(() => {
+    viewerRef.current?.setHeightRange(heightRange);
+  }, [heightRange, result]);
 
   useEffect(() => {
     viewerRef.current?.setView({ material, lighting, projection });
