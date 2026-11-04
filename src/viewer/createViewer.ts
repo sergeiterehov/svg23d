@@ -137,19 +137,34 @@ export function createViewer(container: HTMLElement, options: ViewerOptions = {}
   outlinePass.visibleEdgeColor.set('#7dd3fc');
   outlinePass.hiddenEdgeColor.set('#0ea5e9');
   composer.addPass(outlinePass);
+
+  // Hover is traced with the same kind of outline, only white — a glow on the material would flood
+  // the whole layer instead of marking its edge.
+  const hoverPass = new OutlinePass(
+    new THREE.Vector2(container.clientWidth || 1, container.clientHeight || 1),
+    scene,
+    camera,
+  );
+  hoverPass.edgeStrength = 6;
+  hoverPass.edgeGlow = 0;
+  hoverPass.edgeThickness = 1.5;
+  hoverPass.pulsePeriod = 0;
+  hoverPass.visibleEdgeColor.set('#ffffff');
+  hoverPass.hiddenEdgeColor.set('#94a3b8');
+  composer.addPass(hoverPass);
+
   composer.addPass(new OutputPass());
 
   let selectedPartIds: string[] = [];
   let hoveredPartId: string | null = null;
 
-  /** Hover is a white glow on the part's own material — clearly different from the blue outline. */
   const applyHover = (): void => {
-    for (const child of partsGroup.children) {
-      const material = (child as THREE.Mesh).material as THREE.MeshStandardMaterial;
-      const active = child.userData.partId === hoveredPartId;
-      material.emissive.set(active ? '#ffffff' : '#000000');
-      material.emissiveIntensity = active ? 0.28 : 0;
-    }
+    // The selection colour wins: a part that is already traced in blue is not traced in white again.
+    hoverPass.selectedObjects = partsGroup.children.filter(
+      (child) =>
+        child.userData.partId === hoveredPartId &&
+        !selectedPartIds.includes(child.userData.partId as string),
+    );
   };
 
   /** Publishes a hover change once per part, so the pointer does not spam the store. */
@@ -361,6 +376,7 @@ export function createViewer(container: HTMLElement, options: ViewerOptions = {}
     controls.object = camera;
     renderPass.camera = camera;
     outlinePass.renderCamera = camera;
+    hoverPass.renderCamera = camera;
     controls.update();
   };
 
@@ -564,6 +580,7 @@ export function createViewer(container: HTMLElement, options: ViewerOptions = {}
     setSelectedParts(partIds) {
       selectedPartIds = partIds;
       applySelection();
+      applyHover();
     },
     setHoveredPart(partId) {
       hoveredPartId = partId;
@@ -636,6 +653,7 @@ export function createViewer(container: HTMLElement, options: ViewerOptions = {}
       renderer.setAnimationLoop(null);
       disposeParts();
       outlinePass.selectedObjects = [];
+      hoverPass.selectedObjects = [];
       composer.dispose();
       controls.dispose();
       renderer.dispose();

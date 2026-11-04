@@ -36,9 +36,9 @@ export function StatusBar() {
         <StatusPill status={status} />
 
         {error ? (
-          <span className="truncate select-text text-rose-400">{error}</span>
+          <span className="truncate select-none text-rose-400">{error}</span>
         ) : (
-          <span className="select-text">
+          <span className="select-none">
             {status === 'building'
               ? 'Построение модели…'
               : modelSize
@@ -48,7 +48,7 @@ export function StatusBar() {
         )}
 
         {result && (
-          <span className="select-text text-slate-500">
+          <span className="select-none text-slate-500">
             {result.stats.partCount} дет. · {result.stats.triangleCount.toLocaleString('ru-RU')} тр.
             · {(result.stats.volume / 1000).toFixed(2)} см³
           </span>
