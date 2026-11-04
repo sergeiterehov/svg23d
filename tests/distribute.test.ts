@@ -10,55 +10,69 @@ import { parseSvg } from '@core/svg/parseSvg';
 const landscape = readFileSync(resolve(process.cwd(), 'samples/landscape.svg'), 'utf8');
 const html5 = readFileSync(resolve(process.cwd(), 'samples/html5.svg'), 'utf8');
 
-/** Z range of level `n` (0 = the bottom part): 5 mm tall, 1 mm of it sunk into the level below. */
-function level(n: number): [number, number] {
+/** Z range of a layer `n` steps above the plate. */
+function layer(n: number): [number, number] {
   const zFrom = n * (LAYER_MM - SINK_MM);
   return [zFrom, zFrom + LAYER_MM];
 }
 
-function ranges(source: string): Array<{ id: string; range: [number, number] }> {
+function ranges(source: string): Record<string, [number, number]> {
   const document = parseSvg(source, { fileName: 'sample.svg', global: DEFAULT_GLOBAL_SETTINGS });
   const settings = distributeLayers(document.root, {}, DEFAULT_GLOBAL_SETTINGS);
-  return findPartRoots(document.root, settings).map((id) => ({
-    id,
-    range: [settings[id]?.zFrom ?? NaN, settings[id]?.zTo ?? NaN],
-  }));
+  const out: Record<string, [number, number]> = {};
+  for (const id of findPartRoots(document.root, settings)) {
+    out[id] = [settings[id]?.zFrom ?? NaN, settings[id]?.zTo ?? NaN];
+  }
+  return out;
 }
 
 describe('distributeLayers', () => {
-  it('builds a staircase: every part is one level and ends higher than the part below', () => {
-    // Paint order (bottom part first) becomes the stack order.
-    expect(ranges(landscape)).toEqual([
-      { id: 'sky', range: level(0) },
-      { id: 'sun', range: level(1) },
-      { id: 'hill', range: level(2) },
-      { id: 'trunk', range: level(3) },
-      { id: 'crown', range: level(4) },
-      { id: 'crown-2', range: level(5) },
-    ]);
+  it('stands each landscape element on the layer that covers it', () => {
+    // sky covers everything → it is the base. Sun and hill only lie on the sky, so they share
+    // layer 1. The hill covers the trunk → the trunk climbs onto it. The crowns stick out above
+    // the hill, so nothing but the sky covers them: they stay on layer 1.
+    expect(ranges(landscape)).toEqual({
+      sky: layer(0),
+      sun: layer(1),
+      hill: layer(1),
+      trunk: layer(2),
+      crown: layer(1),
+      'crown-2': layer(1),
+    });
   });
 
-  it('gives the HTML5 logo five distinct protrusion heights', () => {
+  it('does not stack elements that only touch each other', () => {
+    // HTML5 shapes overlap along their edges but never cover one another, so they end up in the
+    // same band above the first one.
     const result = ranges(html5);
-    expect(result.map((item) => item.range)).toEqual([
-      level(0),
-      level(1),
-      level(2),
-      level(3),
-      level(4),
-    ]);
-    // Every top is unique — this is what "разная высота выступа" means.
-    const tops = result.map((item) => item.range[1]);
-    expect(new Set(tops).size).toBe(tops.length);
+    const values = Object.values(result);
+    expect(values[0]).toEqual(layer(0));
+    for (const value of values.slice(1)) expect(value).toEqual(layer(1));
   });
 
-  it('keeps the level thickness and the sink constant', () => {
-    for (const { range } of ranges(landscape)) {
-      expect(range[1] - range[0]).toBe(LAYER_MM);
-    }
-    const result = ranges(landscape).map((item) => item.range[0]);
-    for (let i = 1; i < result.length; i += 1) {
-      expect(result[i] - result[i - 1]).toBe(LAYER_MM - SINK_MM);
-    }
+  it('keeps fully disjoint elements on the base layer', () => {
+    const source =
+      '<svg viewBox="0 0 100 100"><g>' +
+      '<rect x="0" y="0" width="40" height="40"/>' +
+      '<rect x="60" y="60" width="40" height="40"/>' +
+      '</g></svg>';
+    const values = Object.values(ranges(source));
+    expect(values).toHaveLength(2);
+    for (const range of values) expect(range).toEqual(layer(0));
+  });
+
+  it('stacks crossing elements on the higher one and keeps a covered element on its cover', () => {
+    // The bar spans wider than the block, so it is not covered by it — it crosses the block and
+    // lands on the block's level. Nothing else climbs.
+    const source =
+      '<svg viewBox="0 0 100 100"><g>' +
+      '<rect id="base" x="0" y="0" width="100" height="100"/>' +
+      '<rect id="block" x="20" y="20" width="60" height="60"/>' +
+      '<rect id="bar" x="0" y="40" width="100" height="20"/>' +
+      '</g></svg>';
+    const result = ranges(source);
+    expect(result.base).toEqual(layer(0));
+    expect(result.block).toEqual(layer(1));
+    expect(result.bar).toEqual(layer(1));
   });
 });
