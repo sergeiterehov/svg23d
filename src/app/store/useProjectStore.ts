@@ -27,6 +27,7 @@ import { findPartRoots } from '@core/solver/resolveLeaves';
 import { effectiveSettingsFor } from '@core/solver/inheritance';
 import { findParent, shiftChildOrder } from '@core/solver/order';
 import { distributeLayers } from '@core/solver/distribute';
+import { reducePalette, paletteUsage, type PaletteEntry } from '@core/color/palette';
 import { writeThreeMf } from '@core/export/threemf';
 import { writeBinaryStl } from '@core/export/stl';
 import { baseName, downloadBytes } from '@core/export/download';
@@ -118,6 +119,12 @@ interface AppState {
   redo: () => void;
   shiftNode: (nodeId: string, direction: 1 | -1) => void;
   distributeZ: () => void;
+  /** Colours actually used by the model, each with the area it covers in mm² (ADR-0024). */
+  paletteUsage: () => PaletteEntry[];
+  /** Reduces the palette to at most `count` colours; returns how many colours are left. */
+  limitPalette: (count: number) => number;
+  /** Drops every per-element colour override, going back to the colours of the SVG. */
+  resetPalette: () => void;
   updateSettings: (nodeId: string, patch: NodeSettings) => void;
   /** Applies per-node patches as one undo step (multi-selection editing). */
   updateSettingsBatch: (
@@ -299,6 +306,41 @@ export const useProjectStore = create<AppState>()((set, get) => ({
     const settings = distributeLayers(project.document.root, project.settings, project.global);
     pushHistory(set, get, 'distribute');
     set({ project: { ...project, settings } });
+    scheduleRebuild(set, get, 0);
+  },
+
+  paletteUsage: () => {
+    return paletteUsage(get().leaves);
+  },
+
+  limitPalette: (count) => {
+    const { project } = get();
+    if (!project) return 0;
+    const usage = paletteUsage(get().leaves);
+    const { mapping, palette } = reducePalette(usage, count);
+    const patches: Record<string, NodeSettings> = {};
+    for (const leaf of get().leaves) {
+      const next = mapping.get(leaf.color);
+      if (!next || next === leaf.color) continue;
+      patches[leaf.id] = { colorOverride: next };
+    }
+    if (Object.keys(patches).length === 0) return palette.length;
+    pushHistory(set, get, 'palette');
+    set({ project: { ...project, settings: mergePatches(project, patches) } });
+    scheduleRebuild(set, get, 0);
+    return palette.length;
+  },
+
+  resetPalette: () => {
+    const { project } = get();
+    if (!project) return;
+    const patches: Record<string, NodeSettings> = {};
+    for (const [nodeId, settings] of Object.entries(project.settings)) {
+      if (settings.colorOverride !== undefined) patches[nodeId] = { colorOverride: undefined };
+    }
+    if (Object.keys(patches).length === 0) return;
+    pushHistory(set, get, 'palette-reset');
+    set({ project: { ...project, settings: mergePatches(project, patches) } });
     scheduleRebuild(set, get, 0);
   },
 

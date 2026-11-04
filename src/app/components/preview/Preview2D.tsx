@@ -67,7 +67,10 @@ export function Preview2D() {
   const heightSpan = Math.max(maxHeight - minHeight, 1e-6);
 
   const fillFor = (node: SvgDocNode): string => {
-    if (mode !== 'heightmap') return node.fill === 'none' ? '#000000' : node.fill;
+    // A per-element colour override (the palette tool, the colour field) wins over the SVG fill.
+    const override = project.settings[node.id]?.colorOverride;
+    const base = override ?? node.fill;
+    if (mode !== 'heightmap') return base === 'none' ? '#000000' : base;
     const top = heightById.get(node.id);
     if (top === undefined) return '#94a3b8';
     // A model where every element has the same height is "all max".

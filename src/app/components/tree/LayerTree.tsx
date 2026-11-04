@@ -146,7 +146,7 @@ function TreeRow({ node, depth, collapsed, onToggle, rows, rowIndex, anchorRef }
           {expanded ? '▾' : '▸'}
         </button>
 
-        <ColorChip color={node.fill} />
+        <ColorChip color={project.settings[node.id]?.colorOverride ?? node.fill} />
 
         <span className={clsx('truncate', node.kind === 'group' && 'font-medium')}>
           {node.name}
