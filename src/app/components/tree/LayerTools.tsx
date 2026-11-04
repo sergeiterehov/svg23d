@@ -71,7 +71,7 @@ export function LayerTools() {
               Разложить по слоям
             </span>
             <span className="mt-0.5 block text-[10px] leading-snug text-slate-500">
-              Каждой детали — полоса {LAYER_MM} мм с заходом {SINK_MM} мм в нижний слой
+              Полоса {LAYER_MM} мм с заходом {SINK_MM} мм в слой под деталью
             </span>
           </button>
         </div>
