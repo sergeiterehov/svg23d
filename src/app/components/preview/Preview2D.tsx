@@ -43,12 +43,17 @@ export function Preview2D() {
   const height = Math.max(viewBox.maxY - viewBox.minY, 1e-6);
   const shapes = collectShapes(root, project.settings);
 
-  const highlighted = new Set<string>();
+  const selectedShapes = new Set<string>();
   for (const id of selectedIds) {
     const node = findNode(root, id);
-    if (node) for (const child of collectSubtreeIds(node)) highlighted.add(child);
+    if (node) for (const child of collectSubtreeIds(node)) selectedShapes.add(child);
   }
-  if (hoveredId) highlighted.add(hoveredId);
+  // Hovering a group in the tree lights up the whole subtree, so the same white trace is used for both.
+  const hoveredShapes = new Set<string>();
+  if (hoveredId) {
+    const node = findNode(root, hoveredId);
+    if (node) for (const child of collectSubtreeIds(node)) hoveredShapes.add(child);
+  }
 
   const unit = Math.max(width, height);
   const strokeNormal = unit / 900;
@@ -98,11 +103,7 @@ export function Preview2D() {
                 width={width}
                 height={height}
               >
-                <path
-                  d={contoursToPathData(node.maskInclude)}
-                  fill="#ffffff"
-                  fillRule="nonzero"
-                />
+                <path d={contoursToPathData(node.maskInclude)} fill="#ffffff" fillRule="nonzero" />
                 {node.maskExclude && node.maskExclude.length > 0 && (
                   <path
                     d={contoursToPathData(node.maskExclude)}
@@ -116,18 +117,27 @@ export function Preview2D() {
         </defs>
 
         {indexed.map(({ node, index }) => {
-          const active = highlighted.has(node.id);
+          const selected = selectedShapes.has(node.id);
+          const hovered = hoveredShapes.has(node.id);
           // Stroke outlines are built from many overlapping polygons (discs, quads); outlining each
           // of them would show the construction, so only simple shapes get a contour.
           const simple = node.subpaths.length <= 8;
           const opacity = node.hidden
             ? 0.12
             : mode === 'transparent'
-              ? active
+              ? selected || hovered
                 ? 0.95
                 : 0.8
               : 1;
           const masked = node.maskInclude && node.maskInclude.length > 0;
+          // Selection is sky-blue, hover is white: two different states, never the same colour.
+          const stroke = !simple
+            ? 'none'
+            : selected
+              ? '#38bdf8'
+              : hovered
+                ? '#f8fafc'
+                : 'rgba(148, 163, 184, 0.45)';
 
           return (
             <path
@@ -137,8 +147,8 @@ export function Preview2D() {
               fillRule={node.fillRule}
               mask={masked ? `url(#${maskId(index)})` : undefined}
               opacity={opacity}
-              stroke={active && simple ? '#38bdf8' : simple ? 'rgba(148, 163, 184, 0.45)' : 'none'}
-              strokeWidth={active ? strokeActive : strokeNormal}
+              stroke={stroke}
+              strokeWidth={selected || hovered ? strokeActive : strokeNormal}
               strokeLinejoin="round"
               className="cursor-pointer transition-opacity"
               onMouseEnter={() => hover(node.id)}

@@ -23,6 +23,7 @@ import { createEmptyDocument, createEmptyProject, isEmptyDocument } from '@core/
 import { constrainGlobalPatch, constrainNodePatch } from '@core/model/limits';
 import { resolveLeaves, type PartInfo } from '@core/solver/resolveLeaves';
 import { findNode } from '@core/solver/resolveLeaves';
+import { findPartRoots } from '@core/solver/resolveLeaves';
 import { effectiveSettingsFor } from '@core/solver/inheritance';
 import { findParent, shiftChildOrder } from '@core/solver/order';
 import { distributeLayers } from '@core/solver/distribute';
@@ -132,6 +133,10 @@ interface AppState {
   select: (nodeId: string | null) => void;
   /** Adds or removes one node from the selection (⌘/Ctrl-click). */
   toggleSelected: (nodeId: string) => void;
+  /** Replaces the selection with the given nodes (Shift-click range in the tree). */
+  selectMany: (nodeIds: string[]) => void;
+  /** Selects every printable part (⌘/Ctrl+A). */
+  selectAll: () => void;
   hover: (nodeId: string | null) => void;
   setViewMode: (mode: ViewMode) => void;
   rebuild: () => void;
@@ -372,6 +377,15 @@ export const useProjectStore = create<AppState>()((set, get) => ({
         : [...selectedIds, nodeId],
     });
   },
+
+  selectMany: (nodeIds) => set({ selectedIds: nodeIds }),
+
+  selectAll: () => {
+    const { project } = get();
+    if (!project) return;
+    set({ selectedIds: findPartRoots(project.document.root, project.settings) });
+  },
+
   hover: (nodeId) => set({ hoveredId: nodeId }),
   setViewMode: (mode) => set({ viewMode: mode }),
 

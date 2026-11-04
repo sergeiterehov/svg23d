@@ -33,6 +33,10 @@ export default function App() {
         const state = useProjectStore.getState();
         if (event.shiftKey) state.redo();
         else state.undo();
+      } else if (key === 'a' && !inField) {
+        // Select every printable part, the same set the tree and the 3D view show as elements.
+        event.preventDefault();
+        useProjectStore.getState().selectAll();
       } else if (key === 's') {
         event.preventDefault();
         useProjectStore.getState().saveProject();
@@ -60,9 +64,9 @@ export default function App() {
               if (!(event.target as HTMLElement).closest('[data-node-row]')) select(null);
             }}
           >
-            <div className="flex items-center gap-1 px-3 py-2 text-[10px] uppercase tracking-wider text-slate-500">
+            <div className="flex items-center gap-1 px-3 py-2 text-[10px] uppercase tracking-wider text-white">
               <span>Слои</span>
-              <HelpHint text="Сверху вниз = порядок вырезания: верхний элемент делает гнёзда в нижних. Стрелки меняют порядок вручную." />
+              <HelpHint text="Сверху вниз = порядок вырезания: верхний элемент делает гнёзда в нижних. Стрелки меняют порядок вручную. ⌘/Ctrl-клик добавляет к выбору, Shift-клик выбирает диапазон, ⌘/Ctrl+A — все элементы." />
               <LayerTools />
             </div>
             <LayerTree />
@@ -91,9 +95,7 @@ export default function App() {
             <ViewSettingsPopover />
           </div>
 
-          <div className="h-full w-full">
-            {viewMode === '3d' ? <Preview3D /> : <Preview2D />}
-          </div>
+          <div className="h-full w-full">{viewMode === '3d' ? <Preview3D /> : <Preview2D />}</div>
         </main>
 
         <aside className="w-80 shrink-0 border-l border-slate-800 bg-slate-950">

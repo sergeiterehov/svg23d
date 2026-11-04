@@ -19,6 +19,23 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/*
+ * This is an app, not a document: selection is off by default so dragging on the tree, panels or the
+ * canvas never smears a blue highlight over the UI. Values opt back in with `.select-text`, and form
+ * fields stay selectable so text can be edited the usual way.
+ */
+html {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+input,
+textarea,
+[contenteditable='true'] {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
 * {
   box-sizing: border-box;
 }

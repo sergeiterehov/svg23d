@@ -61,7 +61,9 @@ export function LayerTools() {
             className="block w-full px-3 py-1.5 text-left transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:hover:bg-transparent"
           >
             <span
-              className={isEmpty ? 'block text-xs text-slate-600' : 'block text-xs text-slate-200'}
+              className={
+                isEmpty ? 'block text-xs text-slate-600' : 'block text-xs font-medium text-white'
+              }
             >
               Разложить по слоям
             </span>

@@ -40,6 +40,8 @@ export interface ViewerHandle {
   setCameraState: (state: CameraState) => void;
   /** Highlights the given parts with a light-blue outline. */
   setSelectedParts: (partIds: string[]) => void;
+  /** Highlights one part under the pointer in white (hover is not selection). */
+  setHoveredPart: (partId: string | null) => void;
   /** Height band of the selection: the arrows sit on its top/bottom; `null` hides them. */
   setHeightRange: (range: HeightRange | null) => void;
   /** XY centre of the selected shape in model mm; `null` falls back to the model centre. */
@@ -60,6 +62,8 @@ export interface ViewerOptions {
   onPartClick?: (partId: string) => void;
   /** ⌘/Ctrl-click on a part: add it to the selection instead of replacing it. */
   onPartAdd?: (partId: string) => void;
+  /** Pointer moved onto another part (or off all of them): `null` means nothing is hovered. */
+  onPartHover?: (partId: string | null) => void;
   /** Drag start on a 3D height arrow: the top one edits «до», the bottom one «от». */
   onHeightDragStart?: (side: HeightHandleSide) => void;
   /** Drag progress, in mm from the start point, already snapped to `heightStepMm`. */
@@ -136,6 +140,25 @@ export function createViewer(container: HTMLElement, options: ViewerOptions = {}
   composer.addPass(new OutputPass());
 
   let selectedPartIds: string[] = [];
+  let hoveredPartId: string | null = null;
+
+  /** Hover is a white glow on the part's own material — clearly different from the blue outline. */
+  const applyHover = (): void => {
+    for (const child of partsGroup.children) {
+      const material = (child as THREE.Mesh).material as THREE.MeshStandardMaterial;
+      const active = child.userData.partId === hoveredPartId;
+      material.emissive.set(active ? '#ffffff' : '#000000');
+      material.emissiveIntensity = active ? 0.28 : 0;
+    }
+  };
+
+  /** Publishes a hover change once per part, so the pointer does not spam the store. */
+  const emitHover = (partId: string | null): void => {
+    if (hoveredPartId === partId) return;
+    hoveredPartId = partId;
+    applyHover();
+    options.onPartHover?.(partId);
+  };
 
   // Distinguish "click on empty space" from orbiting: only short, non-moving presses count.
   const raycaster = new THREE.Raycaster();
@@ -223,7 +246,16 @@ export function createViewer(container: HTMLElement, options: ViewerOptions = {}
     if (event.buttons !== 0 || !pointAt(event)) return;
     const side = handles.hit(raycaster);
     handles.setHovered(side);
-    canvas.style.cursor = side ? 'ns-resize' : '';
+    if (side) {
+      emitHover(null);
+      canvas.style.cursor = 'ns-resize';
+      return;
+    }
+    // Hover follows the pointer: the part under it is traced in white wherever it is shown.
+    const hits = raycaster.intersectObjects(partsGroup.children, false);
+    const partId = (hits[0]?.object.userData.partId as string | undefined) ?? null;
+    canvas.style.cursor = partId ? 'pointer' : '';
+    emitHover(partId);
   };
 
   canvas.addEventListener('pointerdown', handlePointerDown);
@@ -232,6 +264,7 @@ export function createViewer(container: HTMLElement, options: ViewerOptions = {}
   canvas.addEventListener('pointercancel', (event) => endHeightDrag(event));
   canvas.addEventListener('pointerleave', () => {
     handles.setHovered(null);
+    emitHover(null);
     canvas.style.cursor = '';
   });
 
@@ -526,10 +559,15 @@ export function createViewer(container: HTMLElement, options: ViewerOptions = {}
       // user's camera must survive every settings change and rebuild.
       if (wasEmpty || partOptions?.frame) frameAll();
       applySelection();
+      applyHover();
     },
     setSelectedParts(partIds) {
       selectedPartIds = partIds;
       applySelection();
+    },
+    setHoveredPart(partId) {
+      hoveredPartId = partId;
+      applyHover();
     },
     getCameraState() {
       return {

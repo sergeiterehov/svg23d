@@ -63,9 +63,7 @@ function ElementPanel({ node }: { node: SvgDocNode }) {
   return (
     <section className="border-b border-slate-800 p-3">
       <div className="flex items-center justify-between gap-2">
-        <h2 className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-          Элемент
-        </h2>
+        <h2 className="text-[11px] font-semibold uppercase tracking-wider text-white">Элемент</h2>
         <button
           type="button"
           onClick={() => select(null)}
@@ -260,7 +258,7 @@ function MultiPanel({ nodes }: { nodes: SvgDocNode[] }) {
   return (
     <section className="border-b border-slate-800 p-3">
       <div className="flex items-center justify-between gap-2">
-        <h2 className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+        <h2 className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider text-white">
           <span>Выбрано: {nodes.length}</span>
           <HelpHint text="⌘/Ctrl-клик по дереву добавляет элемент к выбору. Пустое поле с разбросом вроде «12-15» значит разные значения." />
         </h2>
@@ -441,7 +439,7 @@ function ProjectPanel() {
 
   return (
     <section className="border-b border-slate-800 p-3">
-      <h2 className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+      <h2 className="text-[11px] font-semibold uppercase tracking-wider text-white">
         Настройки проекта
       </h2>
       <p className="mt-1 text-[10px] text-slate-500">Значения по умолчанию для всех элементов</p>
@@ -573,9 +571,7 @@ function StatsPanel() {
 
   return (
     <section className="p-3">
-      <h2 className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-        Результат
-      </h2>
+      <h2 className="text-[11px] font-semibold uppercase tracking-wider text-white">Результат</h2>
 
       {!result || !project ? (
         <EmptyStats />
@@ -659,7 +655,7 @@ function SelectionStats({
 function PartList({ parts }: { parts: PartInfo[] }) {
   return (
     <div className="mt-3 space-y-1">
-      <h3 className="text-[10px] uppercase tracking-wider text-slate-500">Детали</h3>
+      <h3 className="text-[10px] uppercase tracking-wider text-white">Детали</h3>
       {parts.map((part) => (
         <div key={part.id} className="flex items-center gap-2 text-[11px] text-slate-300">
           <ColorChip color={part.color} size={10} />
@@ -698,7 +694,7 @@ function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-baseline justify-between gap-2">
       <dt className="text-slate-500">{label}</dt>
-      <dd className="tabular-nums text-slate-200">{value}</dd>
+      <dd className="select-text tabular-nums text-slate-200">{value}</dd>
     </div>
   );
 }

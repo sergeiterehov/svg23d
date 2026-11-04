@@ -22,6 +22,7 @@ export function Preview3D() {
   const result = useProjectStore((s) => s.result);
   const select = useProjectStore((s) => s.select);
   const toggleSelected = useProjectStore((s) => s.toggleSelected);
+  const hoveredId = useProjectStore((s) => s.hoveredId);
   const selectedIds = useProjectStore((s) => s.selectedIds);
   const leaves = useProjectStore((s) => s.leaves);
   const project = useProjectStore((s) => s.project);
@@ -39,6 +40,8 @@ export function Preview3D() {
       onBackgroundClick: () => select(null),
       onPartClick: (partId) => select(partId),
       onPartAdd: (partId) => toggleSelected(partId),
+      // The part under the pointer is traced in white in 3D, in 2D and in the tree alike.
+      onPartHover: (partId) => useProjectStore.getState().hover(partId),
       heightStepMm: HEIGHT_STEP_MM,
       // Dragging an arrow on the model changes «от»/«до»; each 0.5 mm applies as a relative step,
       // so a multi-selection keeps its per-element differences.
@@ -105,6 +108,16 @@ export function Preview3D() {
   useEffect(() => {
     viewerRef.current?.setSelectedParts(selectedPartIds);
   }, [selectedPartIds, result]);
+
+  // Hover may come from the tree or from 2D, so it is pushed into the 3D scene as well.
+  const hoveredPartId = useMemo(() => {
+    if (!project || !hoveredId) return null;
+    return partIdForSelection(project.document.root, leaves, hoveredId);
+  }, [project, leaves, hoveredId]);
+
+  useEffect(() => {
+    viewerRef.current?.setHoveredPart(hoveredPartId);
+  }, [hoveredPartId, result]);
 
   // The arrows straddle the selection's own height band; with nothing selected they disappear.
   const heightRange = useMemo(() => {
