@@ -2,8 +2,8 @@ import { fallbackFillOf, findNode, type PartInfo } from '@core/solver/resolveLea
 import { effectiveSettingsFor } from '@core/solver/inheritance';
 import { orderedChildren } from '@core/solver/order';
 import { collectSubtreeIds, findUnionOwner } from '@core/solver/selection';
-import type { BBox3, LeafStats, NodeSettings, ResolvedLeaf, SvgDocNode } from '@core/model/types';
-import { useProjectStore, type BuildResultState } from '../../store/useProjectStore';
+import type { BBox3, LeafStats, NodeSettings, SvgDocNode } from '@core/model/types';
+import { useProjectStore } from '../../store/useProjectStore';
 import {
   MAX_CLEARANCE_MM,
   MAX_SIZE_MM,
@@ -789,6 +789,11 @@ function ProjectPanel() {
   );
 }
 
+/**
+ * «Результат» и «Детали» — одна и та же пара блоков для всего проекта, выделенной группы и
+ * объединения. «Scope» — весь документ или поддерево выделения: по нему считаются числа и по нему
+ * же собирается список печатных тел, поэтому блоки не меняют вид и смысл при смене выбора.
+ */
 function StatsPanel() {
   const result = useProjectStore((s) => s.result);
   const project = useProjectStore((s) => s.project);
@@ -798,38 +803,69 @@ function StatsPanel() {
 
   const root = project?.document.root ?? null;
   const selected = root && selectedIds.length === 1 ? findNode(root, selectedIds[0]) : null;
-  // A part of a union prints only as part of the merged body: the numbers would belong to the body,
-  // not to the piece, so the panel shows nothing at all rather than someone else's figures.
+  // A part of a union prints only as part of the merged body: neither block belongs to the piece.
   if (selected && root && findUnionOwner(root, selected.id)) return null;
 
-  return (
-    <section className="px-3 py-2.5">
-      <h2 className="text-[11px] font-semibold text-slate-200">Результат</h2>
+  const scope = selected ? collectSubtreeIds(selected) : null;
+  const scopeLeaves = scope ? leaves.filter((leaf) => scope.has(leaf.id)) : leaves;
+  const leafStats = result
+    ? scopeLeaves
+        .map((leaf) => result.leafStats[leaf.id])
+        .filter((value): value is LeafStats => Boolean(value))
+    : [];
+  const partIds = new Set(scopeLeaves.map((leaf) => leaf.partId));
+  const scopeParts = scope ? parts.filter((part) => partIds.has(part.id)) : parts;
+  // A selected element can be missing from the model entirely (hidden or fully covered on top).
+  const missing = Boolean(scope) && leafStats.length === 0;
 
-      {!result || !project ? (
-        <EmptyStats />
-      ) : !selected ? (
-        <>
-          <dl className="mt-2 space-y-1 text-[11px]">
-            <Row label="Деталей" value={String(result.stats.partCount)} />
-            <Row label="Треугольников" value={result.stats.triangleCount.toLocaleString('ru-RU')} />
-            <Row label="Объём" value={formatVolume(result.stats.volume)} />
-            <Row label="Габариты" value={formatBox(result.stats.bbox)} />
+  // Whole project — the numbers the build itself reported; a selection — the same sums over its subtree.
+  const totals = !result
+    ? null
+    : scope
+      ? {
+          triangles: leafStats.reduce((sum, item) => sum + item.triangleCount, 0),
+          volume: leafStats.reduce((sum, item) => sum + item.volume, 0),
+          box: unionBoxes(leafStats.map((item) => item.bbox)),
+        }
+      : {
+          triangles: result.stats.triangleCount,
+          volume: result.stats.volume,
+          box: result.stats.bbox,
+        };
+
+  return (
+    <>
+      <FieldSection title="Результат">
+        {!result || !project || !totals ? (
+          <EmptyStats />
+        ) : missing ? (
+          <p className="text-[11px] leading-snug text-slate-500">
+            Элемент не вошёл в модель: полностью перекрыт верхними элементами или пуст.
+          </p>
+        ) : (
+          <dl className="space-y-1 text-[11px]">
+            <Row
+              label="Деталей"
+              value={String(scope ? scopeParts.length : result.stats.partCount)}
+            />
+            <Row label="Треугольников" value={totals.triangles.toLocaleString('ru-RU')} />
+            <Row label="Объём" value={formatVolume(totals.volume)} />
+            <Row label="Габариты" value={formatBox(totals.box)} />
             <Row label="Время" value={`${result.stats.durationMs} мс`} />
           </dl>
-          {parts.length > 1 && <PartList parts={parts} />}
-        </>
-      ) : (
-        <SelectionStats node={selected} result={result} leaves={leaves} />
+        )}
+      </FieldSection>
+      {result && project && !missing && scopeParts.length > 0 && (
+        <PartsSection parts={scopeParts} />
       )}
-    </section>
+    </>
   );
 }
 
 /** Same rows as a built model, so the panel keeps its shape before anything is loaded. */
 function EmptyStats() {
   return (
-    <dl className="mt-2 space-y-1 text-[11px]">
+    <dl className="space-y-1 text-[11px]">
       <Row label="Деталей" value="—" />
       <Row label="Треугольников" value="—" />
       <Row label="Объём" value="—" />
@@ -839,58 +875,25 @@ function EmptyStats() {
   );
 }
 
-/** Numbers for the selected element (a shape) or the sum over its subtree (a group). */
-function SelectionStats({
-  node,
-  result,
-  leaves,
-}: {
-  node: SvgDocNode;
-  result: BuildResultState;
-  leaves: ResolvedLeaf[];
-}) {
-  const subtree = collectSubtreeIds(node);
-  const nodeLeaves = leaves.filter((leaf) => subtree.has(leaf.id));
-  const stats = nodeLeaves
-    .map((leaf) => result.leafStats[leaf.id])
-    .filter((value): value is LeafStats => Boolean(value));
-
-  if (stats.length === 0) {
-    return (
-      <p className="mt-2 text-xs leading-relaxed text-slate-500">
-        Элемент не вошёл в модель: полностью перекрыт верхними элементами или пуст.
-      </p>
-    );
-  }
-
-  const volume = stats.reduce((sum, item) => sum + item.volume, 0);
-  const triangles = stats.reduce((sum, item) => sum + item.triangleCount, 0);
-  const box = unionBoxes(stats.map((item) => item.bbox));
-
+/** Printed bodies of the result, bottom → top — the same block for the project and for a selection. */
+function PartsSection({ parts }: { parts: PartInfo[] }) {
   return (
-    <dl className="mt-2 space-y-1 text-[11px]">
-      {/* A union is always one element: the composition is in the «Элементы» block instead. */}
-      {node.kind === 'group' && !node.union && (
-        <Row label="Элементов" value={String(stats.length)} />
-      )}
-      <Row label="Треугольников" value={triangles.toLocaleString('ru-RU')} />
-      <Row label="Объём" value={formatVolume(volume)} />
-      <Row label="Габариты" value={formatBox(box)} />
-    </dl>
-  );
-}
-
-function PartList({ parts }: { parts: PartInfo[] }) {
-  return (
-    <div className="mt-3 space-y-1">
-      <h3 className="text-[10px] uppercase tracking-wider text-slate-500">Детали</h3>
-      {parts.map((part) => (
-        <div key={part.id} className="flex items-center gap-2 text-[11px] text-slate-300">
-          <ColorChip color={part.color} size={10} />
-          <span className="truncate">{part.name}</span>
-        </div>
-      ))}
-    </div>
+    <FieldSection
+      title="Детали"
+      hint="Печатные тела результата: снизу вверх, цвет — тот, которым деталь печатается."
+    >
+      <ul className="flex flex-col gap-0.5">
+        {parts.map((part) => (
+          <li
+            key={part.id}
+            className="flex items-center gap-2 px-1 py-1 text-[11px] text-slate-300"
+          >
+            <ColorChip color={part.color} size={11} />
+            <span className="truncate">{part.name}</span>
+          </li>
+        ))}
+      </ul>
+    </FieldSection>
   );
 }
 
