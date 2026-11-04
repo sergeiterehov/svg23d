@@ -12,13 +12,26 @@ import {
 } from '@core/model/limits';
 import { NumberField } from '../common/NumberField';
 import { ColorChip, MixedColorChip, Toggle } from '../common/Toggle';
-import { HelpHint } from '../common/Icon';
+import {
+  ChamferBottomIcon,
+  ChamferTopIcon,
+  ClearanceIcon,
+  CurveIcon,
+  HelpHint,
+  HeightFromIcon,
+  HeightToIcon,
+  ResetIcon,
+  SizeIcon,
+} from '../common/Icon';
 import { SelectField } from '../common/Select';
 
 /**
  * Right panel shows exactly one mode (ADR-0006 UI note): settings of the selected element,
  * settings shared by a multi-selection, or project-wide defaults when nothing is selected.
  * The modes are never mixed in one list.
+ *
+ * Layout follows Figma (ADR-0027): a section is a caption plus a row of filled, borderless fields,
+ * and every field is identified by the icon inside it instead of a caption of its own.
  */
 export function Inspector() {
   const project = useProjectStore((s) => s.project);
@@ -44,10 +57,54 @@ export function Inspector() {
   );
 }
 
+/** One block of related fields: caption on the left, optional actions on the right. */
+function Section({
+  title,
+  hint,
+  right,
+  children,
+}: {
+  title: string;
+  hint?: string;
+  right?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="border-b border-slate-800/70 px-3 py-2.5">
+      <div className="flex min-h-4 items-center justify-between gap-2">
+        <h2 className="flex min-w-0 items-center gap-1 text-[11px] font-semibold text-slate-200">
+          <span className="truncate">{title}</span>
+          {hint && <HelpHint text={hint} />}
+        </h2>
+        {right}
+      </div>
+      <div className="mt-1.5 space-y-1.5">{children}</div>
+    </section>
+  );
+}
+
+/** Pair of two fields in one row, like Figma's W/H or X/Y. */
+function Pair({ children }: { children: React.ReactNode }) {
+  return <div className="grid grid-cols-2 gap-1.5">{children}</div>;
+}
+
+function BackToProject() {
+  const select = useProjectStore((s) => s.select);
+  return (
+    <button
+      type="button"
+      onClick={() => select(null)}
+      title="К настройкам проекта"
+      className="shrink-0 text-[10px] text-slate-500 transition hover:text-slate-200"
+    >
+      к проекту ✕
+    </button>
+  );
+}
+
 function ElementPanel({ node }: { node: SvgDocNode }) {
   const project = useProjectStore((s) => s.project);
   const updateSettings = useProjectStore((s) => s.updateSettings);
-  const select = useProjectStore((s) => s.select);
 
   if (!project) return null;
 
@@ -61,19 +118,8 @@ function ElementPanel({ node }: { node: SvgDocNode }) {
   const own = project.settings[node.id] ?? {};
 
   return (
-    <section className="border-b border-slate-800 p-3">
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="text-[11px] font-semibold uppercase tracking-wider text-white">Элемент</h2>
-        <button
-          type="button"
-          onClick={() => select(null)}
-          title="К настройкам проекта"
-          className="text-[10px] text-slate-500 transition hover:text-slate-200"
-        >
-          к проекту ✕
-        </button>
-      </div>
-      <div className="mt-2 space-y-3">
+    <>
+      <Section title="Элемент" right={<BackToProject />}>
         <div className="flex items-center gap-2">
           <ColorChip color={node.fill} size={14} />
           <div className="min-w-0">
@@ -83,62 +129,57 @@ function ElementPanel({ node }: { node: SvgDocNode }) {
             </div>
           </div>
         </div>
+      </Section>
 
-        <div className="grid grid-cols-2 gap-2">
+      <Section
+        title="Высота"
+        hint="Нижняя и верхняя граница выдавливания. «До» не может быть ниже «от»."
+      >
+        <Pair>
           <NumberField
             label="Высота от"
+            icon={HeightFromIcon}
             value={own.zFrom}
             placeholder={String(round(effective.zFrom))}
             showReset={own.zFrom !== undefined}
             step={0.2}
             max={round(effective.zTo - MIN_HEIGHT_MM)}
-            hint="Нижняя граница выдавливания."
             onCommit={(value) => updateSettings(node.id, { zFrom: value })}
             onDelta={(delta) => updateSettings(node.id, { zFrom: round(effective.zFrom + delta) })}
           />
           <NumberField
             label="Высота до"
+            icon={HeightToIcon}
             value={own.zTo}
             placeholder={String(round(effective.zTo))}
             showReset={own.zTo !== undefined}
             step={0.2}
             min={round(effective.zFrom + MIN_HEIGHT_MM)}
-            hint="Верхняя граница выдавливания: не меньше «высоты от»."
             onCommit={(value) => updateSettings(node.id, { zTo: value })}
             onDelta={(delta) => updateSettings(node.id, { zTo: round(effective.zTo + delta) })}
           />
-        </div>
+        </Pair>
         {effective.zTo < effective.zFrom && (
           <p className="text-[11px] text-rose-400">
             «До» меньше «от» — элемент не будет напечатан.
           </p>
         )}
+      </Section>
 
-        <NumberField
-          label="Допуск"
-          value={own.clearance}
-          placeholder={String(round(effective.clearance))}
-          showReset={own.clearance !== undefined}
-          step={0.05}
-          min={0}
-          max={MAX_CLEARANCE_MM}
-          hint="Действует на гнёзда, которые этот элемент вырезает в деталях НИЖЕ. Зазор на сторону: отверстие будет больше на 2× значения."
-          onCommit={(value) => updateSettings(node.id, { clearance: value })}
-          onDelta={(delta) =>
-            updateSettings(node.id, { clearance: Math.max(0, round(effective.clearance + delta)) })
-          }
-        />
-
-        <div className="grid grid-cols-2 gap-2">
+      <Section
+        title="Фаска"
+        hint="Снятие под 45° на верхней и нижней грани; не больше половины высоты элемента."
+      >
+        <Pair>
           <NumberField
             label="Фаска сверху"
+            icon={ChamferTopIcon}
             value={own.chamferTop}
             placeholder={String(round(effective.chamferTop))}
             showReset={own.chamferTop !== undefined}
             step={0.1}
             min={0}
             max={maxChamfer(effective.zTo - effective.zFrom, effective.chamferBottom)}
-            hint="Снятие фаски под 45° на верхней грани."
             onCommit={(value) => updateSettings(node.id, { chamferTop: value })}
             onDelta={(delta) =>
               updateSettings(node.id, {
@@ -148,13 +189,13 @@ function ElementPanel({ node }: { node: SvgDocNode }) {
           />
           <NumberField
             label="Фаска снизу"
+            icon={ChamferBottomIcon}
             value={own.chamferBottom}
             placeholder={String(round(effective.chamferBottom))}
             showReset={own.chamferBottom !== undefined}
             step={0.1}
             min={0}
             max={maxChamfer(effective.zTo - effective.zFrom, effective.chamferTop)}
-            hint="Снятие фаски под 45° на нижней грани."
             onCommit={(value) => updateSettings(node.id, { chamferBottom: value })}
             onDelta={(delta) =>
               updateSettings(node.id, {
@@ -162,29 +203,36 @@ function ElementPanel({ node }: { node: SvgDocNode }) {
               })
             }
           />
-        </div>
+        </Pair>
+      </Section>
 
-        <div className="space-y-2 border-t border-slate-800 pt-3">
-          <Toggle
-            label="Отдельная деталь"
-            checked={own.isPart === true}
-            onChange={(checked) => updateSettings(node.id, { isPart: checked ? true : undefined })}
-            hint="Верхние элементы будут вырезать гнёзда в этой детали"
-          />
-          <Toggle
-            label="Скрыть"
-            checked={effective.hidden}
-            // A group hides its whole subtree; a child cannot undo that on its own.
-            disabled={effective.hidden && own.hidden !== true}
-            hint={
-              effective.hidden && own.hidden !== true
-                ? 'Элемент скрыт вместе с группой — снимите «Скрыть» у группы'
-                : undefined
-            }
-            onChange={(checked) => updateSettings(node.id, { hidden: checked ? true : undefined })}
-          />
-        </div>
+      <Section
+        title="Гнёзда"
+        hint="Зазор на сторону: отверстие под этот элемент будет больше на 2× значения. Гнездо вырезается в деталях, которые лежат ниже."
+      >
+        <NumberField
+          label="Допуск"
+          icon={ClearanceIcon}
+          value={own.clearance}
+          placeholder={String(round(effective.clearance))}
+          showReset={own.clearance !== undefined}
+          step={0.05}
+          min={0}
+          max={MAX_CLEARANCE_MM}
+          onCommit={(value) => updateSettings(node.id, { clearance: value })}
+          onDelta={(delta) =>
+            updateSettings(node.id, { clearance: Math.max(0, round(effective.clearance + delta)) })
+          }
+        />
+        <Toggle
+          label="Отдельная деталь"
+          checked={own.isPart === true}
+          onChange={(checked) => updateSettings(node.id, { isPart: checked ? true : undefined })}
+          hint="Верхние элементы будут вырезать гнёзда в этой детали"
+        />
+      </Section>
 
+      <Section title="Вид">
         <ColorField
           value={own.colorOverride ?? (node.fill === 'none' ? '#cccccc' : node.fill)}
           // A group has no colour of its own: its children bring their own, so "none" is the default.
@@ -197,8 +245,20 @@ function ElementPanel({ node }: { node: SvgDocNode }) {
               : null
           }
         />
-      </div>
-    </section>
+        <Toggle
+          label="Скрыть"
+          checked={effective.hidden}
+          // A group hides its whole subtree; a child cannot undo that on its own.
+          disabled={effective.hidden && own.hidden !== true}
+          hint={
+            effective.hidden && own.hidden !== true
+              ? 'Элемент скрыт вместе с группой — снимите «Скрыть» у группы'
+              : undefined
+          }
+          onChange={(checked) => updateSettings(node.id, { hidden: checked ? true : undefined })}
+        />
+      </Section>
+    </>
   );
 }
 
@@ -208,7 +268,6 @@ type NumericKey = 'zFrom' | 'zTo' | 'clearance' | 'chamferTop' | 'chamferBottom'
 function MultiPanel({ nodes }: { nodes: SvgDocNode[] }) {
   const project = useProjectStore((s) => s.project);
   const updateSettingsBatch = useProjectStore((s) => s.updateSettingsBatch);
-  const select = useProjectStore((s) => s.select);
 
   if (!project) return null;
   const { root } = project.document;
@@ -265,23 +324,12 @@ function MultiPanel({ nodes }: { nodes: SvgDocNode[] }) {
   const hidden = flags((node) => effectiveOf(node)?.hidden === true);
 
   return (
-    <section className="border-b border-slate-800 p-3">
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider text-white">
-          <span>Выбрано: {nodes.length}</span>
-          <HelpHint text="⌘/Ctrl-клик по дереву добавляет элемент к выбору. Пустое поле с разбросом вроде «12-15» значит разные значения." />
-        </h2>
-        <button
-          type="button"
-          onClick={() => select(null)}
-          title="К настройкам проекта"
-          className="text-[10px] text-slate-500 transition hover:text-slate-200"
-        >
-          к проекту ✕
-        </button>
-      </div>
-
-      <div className="mt-2 space-y-3">
+    <>
+      <Section
+        title={`Выбрано: ${nodes.length}`}
+        hint="⌘/Ctrl-клик по дереву добавляет элемент к выбору. Пустое поле с разбросом вроде «12-15» значит разные значения."
+        right={<BackToProject />}
+      >
         <p className="truncate text-[11px] text-slate-500">
           {nodes
             .slice(0, 4)
@@ -289,40 +337,29 @@ function MultiPanel({ nodes }: { nodes: SvgDocNode[] }) {
             .join(', ')}
           {nodes.length > 4 ? ` и ещё ${nodes.length - 4}` : ''}
         </p>
+      </Section>
 
-        <div className="grid grid-cols-2 gap-2">
+      <Section title="Высота" hint="Применяется ко всем выбранным элементам.">
+        <Pair>
           <NumberField
             label="Высота от"
+            icon={HeightFromIcon}
             value={zFrom.value}
             placeholder={zFrom.placeholder}
             step={0.2}
-            hint="Нижняя граница выдавливания."
             onCommit={zFrom.commit}
             onDelta={(delta) => zFrom.delta(delta)}
           />
           <NumberField
             label="Высота до"
+            icon={HeightToIcon}
             value={zTo.value}
             placeholder={zTo.placeholder}
             step={0.2}
-            hint="Верхняя граница выдавливания."
             onCommit={zTo.commit}
             onDelta={(delta) => zTo.delta(delta)}
           />
-        </div>
-
-        <NumberField
-          label="Допуск"
-          value={clearance.value}
-          placeholder={clearance.placeholder}
-          step={0.05}
-          min={0}
-          max={MAX_CLEARANCE_MM}
-          hint="Зазор на сторону в гнёздах этого элемента."
-          onCommit={clearance.commit}
-          onDelta={(delta) => clearance.delta(delta, 0)}
-        />
-
+        </Pair>
         {nodes.some((node) => {
           const settings = effectiveOf(node);
           return settings ? settings.zTo < settings.zFrom : false;
@@ -331,46 +368,58 @@ function MultiPanel({ nodes }: { nodes: SvgDocNode[] }) {
             У части элементов «до» меньше «от» — они не будут напечатаны.
           </p>
         )}
+      </Section>
 
-        <div className="grid grid-cols-2 gap-2">
+      <Section
+        title="Фаска"
+        hint="Снятие под 45° на верхней и нижней грани (не больше половины высоты элемента)."
+      >
+        <Pair>
           <NumberField
             label="Фаска сверху"
+            icon={ChamferTopIcon}
             value={chamferTop.value}
             placeholder={chamferTop.placeholder}
             step={0.1}
             min={0}
-            hint="Снятие фаски под 45° на верхней грани (не больше половины высоты элемента)."
             onCommit={chamferTop.commit}
             onDelta={(delta) => chamferTop.delta(delta, 0)}
           />
           <NumberField
             label="Фаска снизу"
+            icon={ChamferBottomIcon}
             value={chamferBottom.value}
             placeholder={chamferBottom.placeholder}
             step={0.1}
             min={0}
-            hint="Снятие фаски под 45° на нижней грани (не больше половины высоты элемента)."
             onCommit={chamferBottom.commit}
             onDelta={(delta) => chamferBottom.delta(delta, 0)}
           />
-        </div>
+        </Pair>
+      </Section>
 
-        <div className="space-y-2 border-t border-slate-800 pt-3">
-          <Toggle
-            label="Отдельная деталь"
-            checked={isPart.checked}
-            mixed={isPart.mixed}
-            onChange={(checked) => setFlags('isPart', checked)}
-            hint="Применяется ко всем выбранным элементам"
-          />
-          <Toggle
-            label="Скрыть"
-            checked={hidden.checked}
-            mixed={hidden.mixed}
-            onChange={(checked) => setFlags('hidden', checked)}
-          />
-        </div>
+      <Section title="Гнёзда" hint="Зазор на сторону в гнёздах, которые эти элементы вырезают.">
+        <NumberField
+          label="Допуск"
+          icon={ClearanceIcon}
+          value={clearance.value}
+          placeholder={clearance.placeholder}
+          step={0.05}
+          min={0}
+          max={MAX_CLEARANCE_MM}
+          onCommit={clearance.commit}
+          onDelta={(delta) => clearance.delta(delta, 0)}
+        />
+        <Toggle
+          label="Отдельная деталь"
+          checked={isPart.checked}
+          mixed={isPart.mixed}
+          onChange={(checked) => setFlags('isPart', checked)}
+          hint="Применяется ко всем выбранным элементам"
+        />
+      </Section>
 
+      <Section title="Вид">
         <ColorField
           value={colors[0]}
           mixed={!colorsEqual}
@@ -391,8 +440,14 @@ function MultiPanel({ nodes }: { nodes: SvgDocNode[] }) {
               : null
           }
         />
-      </div>
-    </section>
+        <Toggle
+          label="Скрыть"
+          checked={hidden.checked}
+          mixed={hidden.mixed}
+          onChange={(checked) => setFlags('hidden', checked)}
+        />
+      </Section>
+    </>
   );
 }
 
@@ -413,33 +468,48 @@ function ColorField({
   onReset: (() => void) | null;
 }) {
   return (
-    <label className="flex items-center justify-between gap-2 text-xs text-slate-400">
-      <span>Цвет модели</span>
-      <span className="flex items-center gap-2">
+    <div className="flex items-center justify-between gap-2">
+      <span className="text-[11px] text-slate-400">Цвет модели</span>
+      <span className="flex items-center gap-1.5">
         {mixed && (
           <>
-            <MixedColorChip colors={mixedColors ?? [value, value]} size={14} />
+            <MixedColorChip colors={mixedColors ?? [value, value]} size={12} />
             <span className="text-[10px] text-slate-500">разное</span>
           </>
         )}
         {empty && <span className="text-[10px] text-slate-500">{empty}</span>}
-        <input
-          type="color"
-          value={value}
-          onChange={(event) => onPick(event.target.value)}
-          className="h-6 w-10 cursor-pointer rounded border border-slate-700 bg-transparent"
-        />
+        <label
+          title={value}
+          className="relative flex h-7 cursor-pointer items-center gap-1.5 rounded-md bg-slate-800/60 pl-1.5 pr-2 transition hover:bg-slate-800 focus-within:ring-1 focus-within:ring-sky-500"
+        >
+          <span
+            className="h-3.5 w-5 shrink-0 rounded-[3px] ring-1 ring-inset ring-black/40"
+            style={{ backgroundColor: value }}
+          />
+          <span className="select-none text-[10px] tabular-nums leading-none text-slate-400">
+            {value.toLowerCase()}
+          </span>
+          <input
+            type="color"
+            aria-label="Цвет модели"
+            value={value}
+            onChange={(event) => onPick(event.target.value)}
+            className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+          />
+        </label>
         {onReset && (
           <button
             type="button"
-            className="text-[10px] text-sky-400 hover:text-sky-300"
+            title="Сбросить к цвету из документа"
+            aria-label="Сбросить цвет"
             onClick={onReset}
+            className="grid h-7 w-7 place-items-center rounded-md bg-slate-800/60 text-slate-500 transition hover:bg-slate-800 hover:text-white"
           >
-            сбросить
+            <ResetIcon className="h-3 w-3" />
           </button>
         )}
       </span>
-    </label>
+    </div>
   );
 }
 
@@ -451,44 +521,50 @@ function ProjectPanel() {
   const { global } = project;
 
   return (
-    <section className="border-b border-slate-800 p-3">
-      <h2 className="text-[11px] font-semibold uppercase tracking-wider text-white">
-        Настройки проекта
-      </h2>
-      <p className="mt-1 text-[10px] text-slate-500">Значения по умолчанию для всех элементов</p>
-      <div className="mt-2 space-y-2">
-        <div className="grid grid-cols-[1fr_auto] gap-2">
+    <>
+      <Section title="Настройки проекта">
+        <p className="text-[10px] leading-snug text-slate-500">
+          Значения по умолчанию для всех элементов
+        </p>
+      </Section>
+
+      <Section
+        title="Размер"
+        hint="Ширина, высота или бо́льшая сторона модели в мм; пропорции сохраняются."
+      >
+        <Pair>
           <NumberField
-            label="Размер"
+            label="Размер модели"
+            icon={SizeIcon}
             value={global.fitSizeMm}
             placeholder=""
             step={5}
             min={MIN_SIZE_MM}
             max={MAX_SIZE_MM}
-            hint="Ширина, высота или бо́льшая сторона модели в мм; пропорции сохраняются."
             onCommit={(value) => updateGlobal({ fitSizeMm: value ?? global.fitSizeMm })}
             onDelta={(delta) =>
               updateGlobal({ fitSizeMm: Math.max(1, round(global.fitSizeMm + delta)) })
             }
           />
-          <label className="block">
-            <span className="flex h-4 items-center text-xs leading-none text-slate-400">по</span>
-            <SelectField
-              className="mt-1"
-              value={global.fit}
-              options={[
-                { value: 'max', label: 'максимум' },
-                { value: 'width', label: 'ширине' },
-                { value: 'height', label: 'высоте' },
-              ]}
-              onChange={(value) => updateGlobal({ fit: value as 'width' | 'height' | 'max' })}
-            />
-          </label>
-        </div>
+          <SelectField
+            label="Подгонять по"
+            prefix="по"
+            value={global.fit}
+            options={[
+              { value: 'max', label: 'максимуму' },
+              { value: 'width', label: 'ширине' },
+              { value: 'height', label: 'высоте' },
+            ]}
+            onChange={(value) => updateGlobal({ fit: value as 'width' | 'height' | 'max' })}
+          />
+        </Pair>
+      </Section>
 
-        <div className="grid grid-cols-2 gap-2">
+      <Section title="Высота" hint="Границы выдавливания по умолчанию, мм.">
+        <Pair>
           <NumberField
             label="Высота от"
+            icon={HeightFromIcon}
             value={global.defaultZFrom}
             placeholder=""
             step={0.2}
@@ -497,29 +573,21 @@ function ProjectPanel() {
           />
           <NumberField
             label="Высота до"
+            icon={HeightToIcon}
             value={global.defaultZTo}
             placeholder=""
             step={0.2}
             onCommit={(value) => updateGlobal({ defaultZTo: value ?? 0 })}
             onDelta={(delta) => updateGlobal({ defaultZTo: round(global.defaultZTo + delta) })}
           />
-        </div>
+        </Pair>
+      </Section>
 
-        <NumberField
-          label="Допуск"
-          value={global.defaultClearance}
-          placeholder=""
-          step={0.05}
-          min={0}
-          onCommit={(value) => updateGlobal({ defaultClearance: value ?? 0 })}
-          onDelta={(delta) =>
-            updateGlobal({ defaultClearance: Math.max(0, round(global.defaultClearance + delta)) })
-          }
-        />
-
-        <div className="grid grid-cols-2 gap-2">
+      <Section title="Фаска" hint="Снятие под 45° на верхней и нижней грани по умолчанию.">
+        <Pair>
           <NumberField
             label="Фаска сверху"
+            icon={ChamferTopIcon}
             value={global.defaultChamferTop}
             placeholder=""
             step={0.1}
@@ -533,6 +601,7 @@ function ProjectPanel() {
           />
           <NumberField
             label="Фаска снизу"
+            icon={ChamferBottomIcon}
             value={global.defaultChamferBottom}
             placeholder=""
             step={0.1}
@@ -544,31 +613,46 @@ function ProjectPanel() {
               })
             }
           />
-        </div>
+        </Pair>
+      </Section>
 
-        <label className="block">
-          <span className="flex h-4 items-center gap-1 text-xs leading-none text-slate-400">
-            <span className="truncate">Качество кривых</span>
-            <HelpHint text="Допуск спрямления кривых: точнее — больше треугольников и медленнее расчёт" />
-          </span>
-          <SelectField
-            className="mt-1"
-            value={String(global.flatness)}
-            options={[
-              { value: '0.05', label: 'Черновое' },
-              { value: '0.02', label: 'Обычное' },
-              { value: '0.01', label: 'Точное' },
-              { value: '0.005', label: 'Максимальное' },
-            ]}
-            onChange={(value) => updateGlobal({ flatness: Number(value) })}
-          />
-        </label>
+      <Section title="Допуск" hint="Зазор на сторону в гнёздах между соседними деталями.">
+        <NumberField
+          label="Допуск"
+          icon={ClearanceIcon}
+          value={global.defaultClearance}
+          placeholder=""
+          step={0.05}
+          min={0}
+          onCommit={(value) => updateGlobal({ defaultClearance: value ?? 0 })}
+          onDelta={(delta) =>
+            updateGlobal({ defaultClearance: Math.max(0, round(global.defaultClearance + delta)) })
+          }
+        />
+      </Section>
 
-        <p className="pt-1 text-[10px] leading-snug text-slate-500">
-          Чтобы настроить конкретный элемент, выберите его в дереве слева.
-        </p>
-      </div>
-    </section>
+      <Section
+        title="Качество кривых"
+        hint="Допуск спрямления кривых: точнее — больше треугольников и медленнее расчёт"
+      >
+        <SelectField
+          label="Качество кривых"
+          icon={CurveIcon}
+          value={String(global.flatness)}
+          options={[
+            { value: '0.05', label: 'Черновое' },
+            { value: '0.02', label: 'Обычное' },
+            { value: '0.01', label: 'Точное' },
+            { value: '0.005', label: 'Максимальное' },
+          ]}
+          onChange={(value) => updateGlobal({ flatness: Number(value) })}
+        />
+      </Section>
+
+      <p className="px-3 py-3 text-[10px] leading-snug text-slate-500">
+        Чтобы настроить конкретный элемент, выберите его в дереве слева.
+      </p>
+    </>
   );
 }
 
@@ -583,8 +667,8 @@ function StatsPanel() {
     project && selectedIds.length === 1 ? findNode(project.document.root, selectedIds[0]) : null;
 
   return (
-    <section className="p-3">
-      <h2 className="text-[11px] font-semibold uppercase tracking-wider text-white">Результат</h2>
+    <section className="px-3 py-2.5">
+      <h2 className="text-[11px] font-semibold text-slate-200">Результат</h2>
 
       {!result || !project ? (
         <EmptyStats />
@@ -668,7 +752,7 @@ function SelectionStats({
 function PartList({ parts }: { parts: PartInfo[] }) {
   return (
     <div className="mt-3 space-y-1">
-      <h3 className="text-[10px] uppercase tracking-wider text-white">Детали</h3>
+      <h3 className="text-[10px] uppercase tracking-wider text-slate-500">Детали</h3>
       {parts.map((part) => (
         <div key={part.id} className="flex items-center gap-2 text-[11px] text-slate-300">
           <ColorChip color={part.color} size={10} />

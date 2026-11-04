@@ -154,6 +154,86 @@ export function EyeOffIcon({ className }: IconProps) {
   );
 }
 
+/*
+ * Field prefixes. In the settings panel a field is recognised by the icon inside it, so the
+ * controls need no captions above them (ADR-0027). The pair "from/to" is an arrow pressed to the
+ * floor and to the ceiling; the chamfer pair is a corner cut off at the bottom or at the top.
+ */
+
+/** Lower boundary of the extrusion. */
+export function HeightFromIcon({ className }: IconProps) {
+  return (
+    <Svg className={className}>
+      <path d="M4 20h16" />
+      <path d="M12 4v11" />
+      <path d="m8 11 4 4 4-4" />
+    </Svg>
+  );
+}
+
+/** Upper boundary of the extrusion. */
+export function HeightToIcon({ className }: IconProps) {
+  return (
+    <Svg className={className}>
+      <path d="M4 4h16" />
+      <path d="M12 20V9" />
+      <path d="m8 13 4-4 4 4" />
+    </Svg>
+  );
+}
+
+/** A corner cut off on the upper face: the wall rises, slants and turns into the top edge. */
+export function ChamferTopIcon({ className }: IconProps) {
+  return (
+    <Svg className={className}>
+      <path d="M4 20V9l5-5h11" />
+      <path d="M4 20h16" />
+    </Svg>
+  );
+}
+
+/** A corner cut off on the lower face: the mirror image of the upper one. */
+export function ChamferBottomIcon({ className }: IconProps) {
+  return (
+    <Svg className={className}>
+      <path d="M4 4v11l5 5h11" />
+      <path d="M4 4h16" />
+    </Svg>
+  );
+}
+
+/** Two walls with a gap between them: the clearance of a socket. */
+export function ClearanceIcon({ className }: IconProps) {
+  return (
+    <Svg className={className}>
+      <path d="M8 4H4v16h4" />
+      <path d="M16 4h4v16h-4" />
+    </Svg>
+  );
+}
+
+/** Diagonal arrows: the overall size of the model. */
+export function SizeIcon({ className }: IconProps) {
+  return (
+    <Svg className={className}>
+      <path d="M4 20 20 4" />
+      <path d="M4 14v6h6" />
+      <path d="M20 10V4h-6" />
+    </Svg>
+  );
+}
+
+/** Bezier curve with both handles: how finely curved outlines are flattened. */
+export function CurveIcon({ className }: IconProps) {
+  return (
+    <Svg className={className}>
+      <path d="M4 19c0-8 5-12 16-13" />
+      <circle cx="4" cy="19" r="1.5" />
+      <circle cx="20" cy="6" r="1.5" />
+    </Svg>
+  );
+}
+
 /** Small "?" bubble with an instant custom popover (the native `title` tooltip has a long delay).
  * Rendered through a portal with fixed coordinates so it is never clipped by scrolling panels;
  * the bubble is measured first and clamped to the viewport on both axes.

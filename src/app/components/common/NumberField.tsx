@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import clsx from 'clsx';
 import { HelpHint, ResetIcon } from './Icon';
+import { FieldPrefix, FieldShell, type FieldProps } from './Field';
 
-interface NumberFieldProps {
+interface NumberFieldProps extends FieldProps {
+  /** Accessible name; also the caption above the field when there is no icon or letter. */
   label: string;
   /** Committed value; `undefined` leaves the input empty and shows the placeholder. */
   value: number | undefined;
@@ -15,8 +17,9 @@ interface NumberFieldProps {
   step?: number;
   min?: number;
   max?: number;
+  /** Unit shown at the right edge of the field. */
   suffix?: string;
-  /** Explanation shown in the "?" tooltip. */
+  /** Explanation shown in the "?" tooltip next to the caption (ignored for icon-only fields). */
   hint?: string;
   disabled?: boolean;
   /** Shows the reset-to-inherited button (hidden for project-wide values and multi-selection). */
@@ -42,9 +45,14 @@ export function parseNumber(raw: string): number | null {
 /**
  * Numeric input that commits on Enter or blur, so that a typed value and a delta (`+2`, `-2`)
  * never fight each other mid-typing. Escape reverts the draft.
+ *
+ * With an icon or a letter prefix the field carries its own meaning and no caption is drawn —
+ * the label stays as the accessible name and as the native hover tooltip.
  */
 export function NumberField({
   label,
+  icon,
+  prefix,
   value,
   placeholder = '',
   onCommit,
@@ -93,72 +101,83 @@ export function NumberField({
     onCommit(limit(absolute));
   };
 
+  const flat = Boolean(icon || prefix);
+
+  const field = (
+    <FieldShell
+      disabled={disabled}
+      title={flat ? label : undefined}
+      prefix={<FieldPrefix icon={icon} prefix={prefix} />}
+      suffix={
+        <>
+          {suffix && (
+            <span className="shrink-0 select-none text-[10px] leading-none text-slate-500">
+              {suffix}
+            </span>
+          )}
+          {showReset && (
+            <button
+              type="button"
+              title="Сбросить к наследуемому значению"
+              aria-label="Сбросить к наследуемому значению"
+              onClick={(event) => {
+                event.preventDefault();
+                setDraft(null);
+                onCommit(undefined);
+              }}
+              className="grid h-4 w-4 shrink-0 place-items-center rounded text-slate-500 transition hover:bg-slate-700 hover:text-white"
+            >
+              <ResetIcon className="h-3 w-3" />
+            </button>
+          )}
+        </>
+      }
+    >
+      <input
+        type="text"
+        inputMode="decimal"
+        autoComplete="off"
+        spellCheck={false}
+        aria-label={label}
+        disabled={disabled}
+        value={displayed}
+        placeholder={placeholder}
+        onChange={(event) => setDraft(event.target.value)}
+        onBlur={commit}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') {
+            event.preventDefault();
+            commit();
+            event.currentTarget.blur();
+          } else if (event.key === 'Escape') {
+            event.preventDefault();
+            setDraft(null);
+            event.currentTarget.blur();
+          } else if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+            // Keep the spinner-like behaviour of a number input without a number input.
+            event.preventDefault();
+            const base = parseNumber(displayed) ?? value ?? 0;
+            const next = base + (event.key === 'ArrowUp' ? step : -step);
+            setDraft(String(round(next)));
+          }
+        }}
+        className={clsx(
+          'h-full min-w-0 flex-1 bg-transparent text-xs tabular-nums text-slate-100 outline-none',
+          'placeholder:text-slate-500 disabled:cursor-not-allowed',
+        )}
+      />
+    </FieldShell>
+  );
+
+  if (flat) return field;
+
   return (
     <label className="block">
-      <span className="flex h-4 items-center gap-1 text-xs leading-none text-slate-400">
+      <span className="mb-1 flex h-3.5 items-center gap-1 text-[11px] leading-none text-slate-400">
         <span className="truncate">{label}</span>
         {hint && <HelpHint text={hint} />}
       </span>
-
-      <span className="relative mt-1 block">
-        <input
-          type="text"
-          inputMode="decimal"
-          autoComplete="off"
-          spellCheck={false}
-          disabled={disabled}
-          value={displayed}
-          placeholder={placeholder}
-          onChange={(event) => setDraft(event.target.value)}
-          onBlur={commit}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') {
-              event.preventDefault();
-              commit();
-              event.currentTarget.blur();
-            } else if (event.key === 'Escape') {
-              event.preventDefault();
-              setDraft(null);
-              event.currentTarget.blur();
-            } else if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
-              // Keep the spinner-like behaviour of a number input without a number input.
-              event.preventDefault();
-              const base = parseNumber(displayed) ?? value ?? 0;
-              const next = base + (event.key === 'ArrowUp' ? step : -step);
-              setDraft(String(round(next)));
-            }
-          }}
-          className={clsx(
-            'h-[34px] w-full rounded-md border bg-slate-900/70 pl-2 text-sm text-slate-100 outline-none transition placeholder:text-slate-500',
-            showReset ? 'border-sky-700/70 pr-10' : 'border-slate-700 pr-7',
-            'focus:border-sky-500 focus:ring-1 focus:ring-sky-500/40',
-            disabled && 'opacity-40',
-          )}
-        />
-        <span
-          className={clsx(
-            'pointer-events-none absolute top-1/2 -translate-y-1/2 text-[10px] leading-none text-slate-500',
-            showReset ? 'right-6' : 'right-2',
-          )}
-        >
-          {suffix}
-        </span>
-        {showReset && (
-          <button
-            type="button"
-            title="Сбросить к наследуемому значению"
-            aria-label="Сбросить к наследуемому значению"
-            onClick={(event) => {
-              event.preventDefault();
-              setDraft(null);
-              onCommit(undefined);
-            }}
-            className="absolute right-1 top-1/2 grid h-4 w-4 -translate-y-1/2 place-items-center rounded text-slate-400 hover:bg-slate-700 hover:text-white"
-          >
-            <ResetIcon className="h-3 w-3" />
-          </button>
-        )}
-      </span>
+      {field}
     </label>
   );
 }

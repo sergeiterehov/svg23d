@@ -55,7 +55,7 @@ export function Toggle({
           onClick={() => onChange(mixed ? true : !checked)}
           className={clsx(
             'truncate text-xs',
-            disabled ? 'cursor-not-allowed text-slate-500' : 'text-slate-300 hover:text-white',
+            disabled ? 'cursor-not-allowed text-slate-500' : 'text-slate-200 hover:text-white',
           )}
         >
           {label}

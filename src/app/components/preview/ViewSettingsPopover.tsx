@@ -52,9 +52,7 @@ export function ViewSettingsPopover() {
       {open && (
         <div className="absolute right-0 top-full z-30 mt-2 w-64 rounded-lg border border-slate-700 bg-slate-900 p-3 shadow-2xl">
           <div className="flex items-center justify-between">
-            <h3 className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-              Вид
-            </h3>
+            <h3 className="text-[11px] font-semibold text-slate-200">Вид</h3>
             <IconButton
               label="Закрыть"
               onClick={() => setOpen(false)}
@@ -65,61 +63,47 @@ export function ViewSettingsPopover() {
           </div>
 
           <div className="mt-2 space-y-2">
-            <label className="block">
-              <span className="text-xs text-slate-400">Режим 2D</span>
-              <SelectField
-                className="mt-1"
-                value={view.mode2d}
-                options={[
-                  { value: 'transparent', label: 'Полупрозрачный' },
-                  { value: 'heightmap', label: 'Карта высот' },
-                  { value: 'asis', label: 'Как есть' },
-                ]}
-                onChange={(value) => updateView({ mode2d: value as ViewSettings['mode2d'] })}
-              />
-            </label>
+            <SelectField
+              label="Режим 2D"
+              value={view.mode2d}
+              options={[
+                { value: 'transparent', label: 'Полупрозрачный' },
+                { value: 'heightmap', label: 'Карта высот' },
+                { value: 'asis', label: 'Как есть' },
+              ]}
+              onChange={(value) => updateView({ mode2d: value as ViewSettings['mode2d'] })}
+            />
 
-            <label className="block">
-              <span className="text-xs text-slate-400">Освещение</span>
-              <SelectField
-                className="mt-1"
-                value={view.lighting}
-                options={[
-                  { value: 'studio', label: 'Студийное' },
-                  { value: 'top', label: 'Сверху' },
-                  { value: 'flat', label: 'Плоское' },
-                ]}
-                onChange={(value) => updateView({ lighting: value as ViewSettings['lighting'] })}
-              />
-            </label>
+            <SelectField
+              label="Освещение"
+              value={view.lighting}
+              options={[
+                { value: 'studio', label: 'Студийное' },
+                { value: 'top', label: 'Сверху' },
+                { value: 'flat', label: 'Плоское' },
+              ]}
+              onChange={(value) => updateView({ lighting: value as ViewSettings['lighting'] })}
+            />
 
-            <label className="block">
-              <span className="text-xs text-slate-400">Материал</span>
-              <SelectField
-                className="mt-1"
-                value={view.material}
-                options={[
-                  { value: 'matte', label: 'Матовый' },
-                  { value: 'glossy', label: 'Глянцевый' },
-                ]}
-                onChange={(value) => updateView({ material: value as ViewSettings['material'] })}
-              />
-            </label>
+            <SelectField
+              label="Материал"
+              value={view.material}
+              options={[
+                { value: 'matte', label: 'Матовый' },
+                { value: 'glossy', label: 'Глянцевый' },
+              ]}
+              onChange={(value) => updateView({ material: value as ViewSettings['material'] })}
+            />
 
-            <label className="block">
-              <span className="text-xs text-slate-400">Проекция</span>
-              <SelectField
-                className="mt-1"
-                value={view.projection}
-                options={[
-                  { value: 'perspective', label: 'Перспективная' },
-                  { value: 'orthographic', label: 'Ортогональная' },
-                ]}
-                onChange={(value) =>
-                  updateView({ projection: value as ViewSettings['projection'] })
-                }
-              />
-            </label>
+            <SelectField
+              label="Проекция"
+              value={view.projection}
+              options={[
+                { value: 'perspective', label: 'Перспективная' },
+                { value: 'orthographic', label: 'Ортогональная' },
+              ]}
+              onChange={(value) => updateView({ projection: value as ViewSettings['projection'] })}
+            />
           </div>
         </div>
       )}
