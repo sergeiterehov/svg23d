@@ -33,6 +33,7 @@ function leaf(id: string, partId: string): ResolvedLeaf {
     clearance: 0,
     chamferTop: 0,
     chamferBottom: 0,
+    hidden: false,
   };
 }
 

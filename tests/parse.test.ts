@@ -59,8 +59,15 @@ describe('parseSvg', () => {
   });
 
   it('rejects broken documents', () => {
-    expect(() => parseSvg('<svg><path d="M0 0"</svg>', { fileName: 'bad.svg', global: DEFAULT_GLOBAL_SETTINGS })).toThrow();
-    expect(() => parseSvg('<div/>', { fileName: 'bad.svg', global: DEFAULT_GLOBAL_SETTINGS })).toThrow();
+    expect(() =>
+      parseSvg('<svg><path d="M0 0"</svg>', {
+        fileName: 'bad.svg',
+        global: DEFAULT_GLOBAL_SETTINGS,
+      }),
+    ).toThrow();
+    expect(() =>
+      parseSvg('<div/>', { fileName: 'bad.svg', global: DEFAULT_GLOBAL_SETTINGS }),
+    ).toThrow();
   });
 
   it('warns about unsupported elements', () => {
@@ -85,7 +92,11 @@ describe('parseSvg', () => {
 describe('resolveLeaves', () => {
   it('creates one part per top-level child', () => {
     const doc = parseSample();
-    const resolved = resolveLeaves({ document: doc, settings: {}, global: DEFAULT_GLOBAL_SETTINGS });
+    const resolved = resolveLeaves({
+      document: doc,
+      settings: {},
+      global: DEFAULT_GLOBAL_SETTINGS,
+    });
     expect(resolved.leaves).toHaveLength(5);
     expect(resolved.parts).toHaveLength(5);
     expect(resolved.leaves.map((leaf) => leaf.order)).toEqual([0, 1, 2, 3, 4]);
@@ -153,6 +164,31 @@ describe('resolveLeaves', () => {
     });
     expect(resolved.leaves).toHaveLength(4);
     expect(resolved.warnings.some((w) => w.nodeId === first.id)).toBe(true);
+  });
+
+  it('keeps a hidden leaf in the model and marks it for the view', () => {
+    const doc = parseSample();
+    const first = doc.root.children[0].children[0];
+    const resolved = resolveLeaves({
+      document: doc,
+      settings: { [first.id]: { hidden: true } },
+      global: DEFAULT_GLOBAL_SETTINGS,
+    });
+    // «Скрыть» is a view flag (ADR-0035): the leaf is still resolved, only flagged.
+    expect(resolved.leaves).toHaveLength(5);
+    expect(resolved.leaves.find((leaf) => leaf.id === first.id)?.hidden).toBe(true);
+  });
+
+  it('drops an ignored leaf from the model', () => {
+    const doc = parseSample();
+    const first = doc.root.children[0].children[0];
+    const resolved = resolveLeaves({
+      document: doc,
+      settings: { [first.id]: { ignored: true } },
+      global: DEFAULT_GLOBAL_SETTINGS,
+    });
+    expect(resolved.leaves).toHaveLength(4);
+    expect(resolved.leaves.some((leaf) => leaf.id === first.id)).toBe(false);
   });
 
   it('honours explicit part markers', () => {

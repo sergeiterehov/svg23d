@@ -34,7 +34,10 @@ function post(message: WorkerResponse, transfer?: Transferable[]): void {
   scope.postMessage(message, transfer);
 }
 
-async function handleBuild(jobId: number, leaves: Parameters<typeof buildModel>[0]['leaves']): Promise<void> {
+async function handleBuild(
+  jobId: number,
+  leaves: Parameters<typeof buildModel>[0]['leaves'],
+): Promise<void> {
   const api = await loadApi();
   if (jobId !== latestJobId) return;
 
@@ -45,15 +48,22 @@ async function handleBuild(jobId: number, leaves: Parameters<typeof buildModel>[
   if (jobId !== latestJobId) return;
 
   const transfer: Transferable[] = [];
-  for (const part of result.parts) {
-    transfer.push(part.positions.buffer, part.indices.buffer);
+  // A part without hidden leaves is the same object in both lists, so buffers are deduplicated:
+  // transferring one buffer twice throws.
+  const buffers = new Set<ArrayBufferLike>();
+  for (const part of [...result.parts, ...result.displayParts]) {
+    if (buffers.has(part.positions.buffer)) continue;
+    buffers.add(part.positions.buffer);
+    buffers.add(part.indices.buffer);
   }
+  transfer.push(...(buffers as Set<ArrayBuffer>));
 
   post(
     {
       type: 'result',
       jobId,
       parts: result.parts,
+      displayParts: result.displayParts,
       stats: { ...result.stats, durationMs: Date.now() - started },
       leafStats: result.leafStats,
       warnings: result.warnings,

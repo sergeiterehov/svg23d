@@ -135,7 +135,10 @@ export interface PendingImport {
 }
 
 export interface BuildResultState {
+  /** The printed model, hidden elements included. */
   parts: PartMesh[];
+  /** What the 3D view draws: the same parts without the hidden leaves. */
+  displayParts: PartMesh[];
   stats: BuildStats;
   leafStats: Record<string, LeafStats>;
   warnings: DocumentWarning[];
@@ -1155,6 +1158,7 @@ async function performRebuild(set: SetState, get: GetState): Promise<void> {
     set({
       result: {
         parts: response.parts,
+        displayParts: response.displayParts,
         stats: response.stats,
         leafStats: response.leafStats,
         warnings: response.warnings,

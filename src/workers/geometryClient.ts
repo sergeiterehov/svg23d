@@ -76,6 +76,7 @@ export class GeometryClient {
       pending.resolve({
         jobId: message.jobId,
         parts: message.parts,
+        displayParts: message.displayParts,
         stats: message.stats,
         leafStats: message.leafStats,
         warnings: message.warnings,

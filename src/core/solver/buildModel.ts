@@ -5,11 +5,18 @@ import type {
   DocumentWarning,
   LeafSource,
   LeafStats,
+  MeshData,
   PartMesh,
   ResolvedLeaf,
 } from '../model/types';
 import { emptyBBox3 } from '../model/types';
-import { bboxOfContours, bboxIntersects, isEmptyBBox, leafContours, padBBox } from '../model/defaults';
+import {
+  bboxOfContours,
+  bboxIntersects,
+  isEmptyBBox,
+  leafContours,
+  padBBox,
+} from '../model/defaults';
 import { buildPrism } from '../geometry/extrude';
 import { meshFromSolid } from '../geometry/mesh';
 import {
@@ -38,7 +45,10 @@ export interface BuildOptions {
 }
 
 export interface BuildOutput {
+  /** The printed model: every leaf, including the ones hidden in the view. */
   parts: PartMesh[];
+  /** What the 3D view draws: the same parts without the hidden leaves (ADR-0035). */
+  displayParts: PartMesh[];
   stats: BuildStats;
   leafStats: Record<string, LeafStats>;
   warnings: DocumentWarning[];
@@ -109,7 +119,7 @@ export function buildModel({ api, leaves }: BuildOptions): BuildOutput {
     }
   };
 
-  const partSolids = new Map<string, Solid[]>();
+  const partSolids = new Map<string, { solid: Solid; hidden: boolean }[]>();
   const partMeta = new Map<string, ResolvedLeaf>();
 
   for (const entry of entries) {
@@ -164,7 +174,7 @@ export function buildModel({ api, leaves }: BuildOptions): BuildOutput {
     }
 
     const list = partSolids.get(leaf.partId) ?? [];
-    list.push(solid);
+    list.push({ solid, hidden: leaf.hidden });
     partSolids.set(leaf.partId, list);
     if (!partMeta.has(leaf.partId)) partMeta.set(leaf.partId, leaf);
 
@@ -180,7 +190,31 @@ export function buildModel({ api, leaves }: BuildOptions): BuildOutput {
   }
 
   const parts: PartMesh[] = [];
-  for (const [partId, solids] of partSolids) {
+  // What the viewer draws. «Скрыть» is a view flag: the model keeps the leaf, so the part has to be
+  // rebuilt once more without it. A part without hidden leaves is shared, so the usual case costs
+  // nothing extra.
+  const displayParts: PartMesh[] = [];
+
+  for (const [partId, items] of partSolids) {
+    const meta = partMeta.get(partId);
+    const hiddenItems = items.filter((item) => item.hidden);
+    const visibleItems = items.filter((item) => !item.hidden);
+
+    let visibleMesh: MeshData | null = null;
+    let solids = items.map((item) => item.solid);
+    if (hiddenItems.length > 0) {
+      solids = hiddenItems.map((item) => item.solid);
+      if (visibleItems.length > 0) {
+        const visibleSolid = unionSolids(visibleItems.map((item) => item.solid));
+        if (visibleSolid && !visibleSolid.isEmpty()) {
+          visibleMesh = meshFromSolid(visibleSolid);
+          solids = [visibleSolid, ...solids];
+        } else {
+          visibleSolid?.delete();
+        }
+      }
+    }
+
     const merged = unionSolids(solids);
     if (!merged || merged.isEmpty()) {
       merged?.delete();
@@ -189,13 +223,13 @@ export function buildModel({ api, leaves }: BuildOptions): BuildOutput {
     const mesh = meshFromSolid(merged);
     merged.delete();
 
-    const meta = partMeta.get(partId);
-    parts.push({
-      partId,
-      name: meta?.partName ?? partId,
-      color: meta?.color ?? '#cccccc',
-      ...mesh,
-    });
+    const name = meta?.partName ?? partId;
+    const color = meta?.color ?? '#cccccc';
+    const part: PartMesh = { partId, name, color, ...mesh };
+    parts.push(part);
+
+    if (hiddenItems.length === 0) displayParts.push(part);
+    else if (visibleMesh) displayParts.push({ partId, name, color, ...visibleMesh });
   }
 
   for (const ghost of ghostCache.values()) ghost?.delete();
@@ -227,6 +261,7 @@ export function buildModel({ api, leaves }: BuildOptions): BuildOutput {
 
   return {
     parts,
+    displayParts,
     leafStats,
     warnings,
     stats: {

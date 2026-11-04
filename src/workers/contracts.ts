@@ -24,6 +24,7 @@ export type WorkerRequest = BuildRequestMessage | CancelRequestMessage;
 export interface BuildResponse {
   jobId: number;
   parts: PartMesh[];
+  displayParts: PartMesh[];
   stats: BuildStats;
   leafStats: Record<string, LeafStats>;
   warnings: DocumentWarning[];
@@ -35,6 +36,7 @@ export type WorkerResponse =
       type: 'result';
       jobId: number;
       parts: PartMesh[];
+      displayParts: PartMesh[];
       stats: BuildStats;
       leafStats: Record<string, LeafStats>;
       warnings: DocumentWarning[];

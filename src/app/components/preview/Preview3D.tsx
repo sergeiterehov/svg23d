@@ -95,7 +95,8 @@ export function Preview3D() {
     // Frame the camera only when the document changes, so a rebuild never jumps the view.
     const shouldFrame = framedHashRef.current !== documentHash;
     framedHashRef.current = documentHash;
-    viewerRef.current?.setParts(result?.parts ?? [], { frame: shouldFrame });
+    // Hidden elements stay in the model but are not drawn: the view gets its own mesh set (ADR-0035).
+    viewerRef.current?.setParts(result?.displayParts ?? [], { frame: shouldFrame });
   }, [result, documentHash]);
 
   const selectedPartIds = useMemo(() => {

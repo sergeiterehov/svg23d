@@ -42,6 +42,9 @@ interface Inherited {
   clearance: number;
   chamferTop: number;
   chamferBottom: number;
+  /** «Игнорировать»: the element is not part of the model at all (ADR-0035). */
+  ignored: boolean;
+  /** «Скрыть»: the element is in the model but is not drawn in 3D. */
   hidden: boolean;
 }
 
@@ -128,6 +131,7 @@ export function resolveLeaves(input: ResolveInput): ResolveResult {
     clearance: global.defaultClearance,
     chamferTop: global.defaultChamferTop,
     chamferBottom: global.defaultChamferBottom,
+    ignored: false,
     hidden: false,
   };
 
@@ -139,7 +143,8 @@ export function resolveLeaves(input: ResolveInput): ResolveResult {
       clearance: own.clearance ?? inherited.clearance,
       chamferTop: own.chamferTop ?? inherited.chamferTop,
       chamferBottom: own.chamferBottom ?? inherited.chamferBottom,
-      hidden: inherited.hidden || node.hidden || own.hidden === true,
+      ignored: inherited.ignored || node.hidden || own.ignored === true,
+      hidden: inherited.hidden || own.hidden === true,
     };
 
     let currentPartId = partId;
@@ -150,7 +155,7 @@ export function resolveLeaves(input: ResolveInput): ResolveResult {
       currentPartName = node.name;
     }
 
-    if (own.enabled === false) return;
+    if (own.ignored === true || node.hidden) return;
 
     const maskOf = (source: SvgDocNode): LeafSource['mask'] =>
       source.maskInclude && source.maskInclude.length > 0
@@ -197,6 +202,7 @@ export function resolveLeaves(input: ResolveInput): ResolveResult {
         clearance: Math.max(0, effective.clearance),
         chamferTop: Math.max(0, effective.chamferTop),
         chamferBottom: Math.max(0, effective.chamferBottom),
+        hidden: effective.hidden,
       });
     };
 
@@ -204,15 +210,15 @@ export function resolveLeaves(input: ResolveInput): ResolveResult {
       // One object made of everything inside (ADR-0028): the children's own settings are ignored, the
       // node's inherited ones apply to the whole body. The boolean union happens in the solver, where
       // the 2D engine is available.
-      if (effective.hidden) return;
+      if (effective.ignored) return;
       const sources: LeafSource[] = [];
       let fill = node.fill;
       const collect = (current: SvgDocNode): void => {
         if (current.kind === 'shape') {
-          // Visibility is the one per-part setting that still works: hiding a piece removes it from
-          // the merged body (the tree's eye button and «Скрыть часть» in the inspector rely on it).
-          const partHidden = settings[current.id]?.hidden === true || current.hidden;
-          if (partHidden) return;
+          // A piece leaves the body only when it is excluded from the model («Игнорировать») or is
+          // hidden in the source; «Скрыть» is a view flag and does not touch the merged body.
+          const partIgnored = settings[current.id]?.ignored === true || current.hidden;
+          if (partIgnored) return;
           const contours = applyMatrixToContours(current.subpaths, mapping.matrix);
           if (contours.length === 0) return;
           if (fill === 'none' && current.fill !== 'none') fill = current.fill;
@@ -230,7 +236,6 @@ export function resolveLeaves(input: ResolveInput): ResolveResult {
     }
 
     if (node.kind === 'shape') {
-      if (effective.hidden) return;
       const contours = applyMatrixToContours(node.subpaths, mapping.matrix);
       if (contours.length === 0) return;
       const mask = maskOf(node);

@@ -279,10 +279,23 @@ function ElementPanel({ node }: { node: SvgDocNode }) {
               hint={
                 effective.hidden && own.hidden !== true
                   ? 'Элемент скрыт вместе с группой — снимите «Скрыть» у группы'
-                  : undefined
+                  : 'Только вид: элемент не рисуется в 3D, модель и экспорт не меняются'
               }
               onChange={(checked) =>
                 updateSettings(node.id, { hidden: checked ? true : undefined })
+              }
+            />
+            <Toggle
+              label="Игнорировать"
+              checked={effective.ignored}
+              disabled={effective.ignored && own.ignored !== true}
+              hint={
+                effective.ignored && own.ignored !== true
+                  ? 'Элемент уже вне модели: так у группы или в самом файле (display:none)'
+                  : 'Эквивалентно удалению: элемент не входит в модель, но остаётся в проекте'
+              }
+              onChange={(checked) =>
+                updateSettings(node.id, { ignored: checked ? true : undefined })
               }
             />
           </FieldSection>
@@ -338,8 +351,9 @@ function ElementsSection({ node }: { node: SvgDocNode }) {
 }
 
 /**
- * A part of a union: only the things that make sense for a piece are offered — its visibility
- * (it is still a shape of the document) and its place in the stack. Geometry comes from the union.
+ * A part of a union: the piece is not printed on its own, so only its place in the body is offered —
+ * «Игнорировать» takes it out of the merged body, exactly like deleting it (ADR-0035). «Скрыть» is
+ * not offered: a piece inside a merged body cannot be hidden from the view on its own.
  */
 function UnionPartSections({ node, unionParent }: { node: SvgDocNode; unionParent: SvgDocNode }) {
   const project = useProjectStore((s) => s.project);
@@ -359,11 +373,11 @@ function UnionPartSections({ node, unionParent }: { node: SvgDocNode; unionParen
       hint="Высоты, фаска, допуск и цвет задаются у самого объединения: части сливаются в одно тело до выдавливания."
     >
       <Toggle
-        label="Скрыть часть"
-        checked={effective?.hidden === true}
-        disabled={effective?.hidden === true && own.hidden !== true}
-        hint="Скрытая часть не входит в объединение — например, чтобы убрать обводку"
-        onChange={(checked) => updateSettings(node.id, { hidden: checked ? true : undefined })}
+        label="Игнорировать часть"
+        checked={effective?.ignored === true}
+        disabled={effective?.ignored === true && own.ignored !== true}
+        hint="Эквивалентно удалению: часть не входит в объединение — например, чтобы убрать обводку"
+        onChange={(checked) => updateSettings(node.id, { ignored: checked ? true : undefined })}
       />
     </FieldSection>
   );
@@ -412,7 +426,7 @@ function MultiPanel({ nodes }: { nodes: SvgDocNode[] }) {
     return { checked: !mixed && values[0] === true, mixed };
   };
 
-  const setFlags = (key: 'isPart' | 'hidden', value: boolean) =>
+  const setFlags = (key: 'isPart' | 'hidden' | 'ignored', value: boolean) =>
     updateSettingsBatch(
       Object.fromEntries(nodes.map((node) => [node.id, { [key]: value ? true : undefined }])),
     );
@@ -429,6 +443,7 @@ function MultiPanel({ nodes }: { nodes: SvgDocNode[] }) {
   const chamferBottom = numbers('chamferBottom');
   const isPart = flags((node) => settings[node.id]?.isPart === true);
   const hidden = flags((node) => effectiveOf(node)?.hidden === true);
+  const ignored = flags((node) => effectiveOf(node)?.ignored === true);
   const unionParents = nodes.map((node) => findUnionOwner(root, node.id));
   const namesText = nodes
     .slice(0, 4)
@@ -445,7 +460,7 @@ function MultiPanel({ nodes }: { nodes: SvgDocNode[] }) {
         </p>
         <p className="text-[10px] leading-snug text-amber-400/90">
           Это части объединений: каждая печатается в составе своего тела, поэтому высоты, фаска и
-          допуск задаются у самого объединения. Скрыть часть по отдельности можно в дереве.
+          допуск задаются у самого объединения. Исключить часть из тела можно в свойствах части.
         </p>
       </FieldSection>
     );
@@ -578,6 +593,14 @@ function MultiPanel({ nodes }: { nodes: SvgDocNode[] }) {
           checked={hidden.checked}
           mixed={hidden.mixed}
           onChange={(checked) => setFlags('hidden', checked)}
+          hint="Только вид: модель и экспорт не меняются"
+        />
+        <Toggle
+          label="Игнорировать"
+          checked={ignored.checked}
+          mixed={ignored.mixed}
+          onChange={(checked) => setFlags('ignored', checked)}
+          hint="Эквивалентно удалению: элементы не входят в модель"
         />
       </FieldSection>
     </>
@@ -815,8 +838,18 @@ function StatsPanel() {
     : [];
   const partIds = new Set(scopeLeaves.map((leaf) => leaf.partId));
   const scopeParts = scope ? parts.filter((part) => partIds.has(part.id)) : parts;
-  // A selected element can be missing from the model entirely (hidden or fully covered on top).
+  // A selected element can be missing from the model entirely (ignored, hidden in the source or
+  // fully covered on top).
   const missing = Boolean(scope) && leafStats.length === 0;
+  const ignored =
+    selected && project
+      ? effectiveSettingsFor(
+          project.document.root,
+          project.settings,
+          project.global,
+          selected.id,
+        )?.ignored === true
+      : false;
 
   // Whole project — the numbers the build itself reported; a selection — the same sums over its subtree.
   const totals = !result
@@ -840,7 +873,9 @@ function StatsPanel() {
           <EmptyStats />
         ) : missing ? (
           <p className="text-[11px] leading-snug text-slate-500">
-            Элемент не вошёл в модель: полностью перекрыт верхними элементами или пуст.
+            {ignored
+              ? 'Элемент игнорируется: его нет в модели, как после удаления. Снимите «Игнорировать», чтобы вернуть.'
+              : 'Элемент не вошёл в модель: полностью перекрыт верхними элементами или пуст.'}
           </p>
         ) : (
           <dl className="space-y-1 text-[11px]">

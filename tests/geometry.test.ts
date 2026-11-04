@@ -29,6 +29,7 @@ function makeLeaf(overrides: Partial<ResolvedLeaf> & { id: string }): ResolvedLe
     clearance: 0,
     chamferTop: 0,
     chamferBottom: 0,
+    hidden: false,
     ...overrides,
   };
 }
@@ -208,7 +209,7 @@ describe('assembly solver', () => {
     const partB = result.parts.find((p) => p.partId === 'B');
     // The socket is slightly larger than the part because the ghost carries the same chamfer.
     expect(partB?.volume).toBeLessThan(800);
-    expect(20000 - (partA?.volume ?? 0)).toBeGreaterThan((partB?.volume ?? 0));
+    expect(20000 - (partA?.volume ?? 0)).toBeGreaterThan(partB?.volume ?? 0);
   });
 
   it('warns when an element is completely cut away by a higher one', () => {
@@ -233,5 +234,55 @@ describe('assembly solver', () => {
     expect(result.parts).toHaveLength(1);
     expect(result.warnings.some((warning) => warning.code === 'fully-cut')).toBe(true);
     expect(result.warnings.find((warning) => warning.code === 'fully-cut')?.nodeId).toBe('lower');
+  });
+});
+
+describe('hidden elements (ADR-0035)', () => {
+  it('keeps a hidden element in the model and only drops it from the display set', () => {
+    const plate = makeLeaf({ id: 'plate', partId: 'A', order: 0, zFrom: 0, zTo: 2 });
+    const pin = makeLeaf({
+      id: 'pin',
+      partId: 'B',
+      order: 1,
+      zFrom: 0,
+      zTo: 2,
+      contours: square(20, 40, 40),
+      hidden: true,
+    });
+
+    const result = buildModel({ api, leaves: [plate, pin] });
+    // The model is untouched: the pin is still printed and still cuts its socket in the plate.
+    expect(result.parts.map((part) => part.partId).sort()).toEqual(['A', 'B']);
+    expect(result.parts.find((part) => part.partId === 'A')?.volume).toBeCloseTo(20000 - 800, 0);
+    expect(result.stats.partCount).toBe(2);
+
+    // The view gets the plate only.
+    expect(result.displayParts.map((part) => part.partId)).toEqual(['A']);
+  });
+
+  it('rebuilds a part without its hidden leaves', () => {
+    const a = makeLeaf({ id: 'a', partId: 'A', order: 0, zFrom: 0, zTo: 2 });
+    const b = makeLeaf({
+      id: 'b',
+      partId: 'A',
+      order: 1,
+      zFrom: 0,
+      zTo: 2,
+      // Sticks out of the plate, so the drawn body is visibly smaller than the printed one.
+      contours: square(20, 90, 40),
+      hidden: true,
+    });
+
+    const result = buildModel({ api, leaves: [a, b] });
+    expect(result.parts[0].volume).toBeCloseTo(20000 + 10 * 20 * 2, 0);
+    expect(result.displayParts[0].volume).toBeCloseTo(20000, 0);
+    // The display mesh is a different body: the hidden leaf is not in it.
+    expect(result.displayParts[0].triangleCount).toBeLessThan(result.parts[0].triangleCount);
+  });
+
+  it('shares one mesh when nothing is hidden', () => {
+    const leaf = makeLeaf({ id: 'a' });
+    const result = buildModel({ api, leaves: [leaf] });
+    expect(result.displayParts[0]).toBe(result.parts[0]);
   });
 });

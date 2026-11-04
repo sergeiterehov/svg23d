@@ -6,7 +6,10 @@ export interface EffectiveSettings {
   clearance: number;
   chamferTop: number;
   chamferBottom: number;
+  /** View-only: not drawn in 3D, the model stays as it is. */
   hidden: boolean;
+  /** Excluded from the model — equivalent to deleting the node (also set by `display:none`). */
+  ignored: boolean;
   isPart: boolean;
   colorOverride: string | undefined;
 }
@@ -28,6 +31,7 @@ export function effectiveSettingsFor(
     chamferTop: global.defaultChamferTop,
     chamferBottom: global.defaultChamferBottom,
     hidden: false,
+    ignored: false,
     isPart: false,
     colorOverride: undefined,
   };
@@ -40,6 +44,7 @@ export function effectiveSettingsFor(
     if (own.clearance !== undefined) effective.clearance = own.clearance;
     if (own.chamferTop !== undefined) effective.chamferTop = own.chamferTop;
     if (own.chamferBottom !== undefined) effective.chamferBottom = own.chamferBottom;
+    if (own.ignored === true) effective.ignored = true;
     // Hiding is sticky: `hidden: true` on a group hides everything inside it, and a child's own
     // `hidden: false` cannot cancel that — otherwise the tree shows an element as visible while its
     // parent has hidden it.
@@ -47,7 +52,9 @@ export function effectiveSettingsFor(
     if (own.isPart !== undefined) effective.isPart = own.isPart;
     if (own.colorOverride !== undefined) effective.colorOverride = own.colorOverride;
   }
-  effective.hidden = effective.hidden || path.some((node) => node.hidden);
+  // «Игнорировать» is sticky too, and an element hidden in the source (`display:none`) is not part of
+  // the drawing at all: both mean "not in the model", so the UI shows one state for them.
+  effective.ignored = effective.ignored || path.some((node) => node.hidden);
   return effective;
 }
 

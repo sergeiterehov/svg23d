@@ -357,6 +357,8 @@ function TreeRow({ node, depth, ui, anchorRef, onDrop }: TreeRowProps) {
   const isSelected = selectedIds.includes(node.id);
   const isHovered = hoveredId === node.id;
   const isHidden = effective?.hidden === true;
+  /** Excluded from the model: shown struck through, because the element is not printed at all. */
+  const isIgnored = effective?.ignored === true;
   /** Hidden by this node itself (a group hiding its subtree cannot be undone from a child). */
   const ownHidden = project.settings[node.id]?.hidden === true;
   const hiddenByGroup = isHidden && !ownHidden;
@@ -407,6 +409,7 @@ function TreeRow({ node, depth, ui, anchorRef, onDrop }: TreeRowProps) {
               ? 'bg-white/10 text-white'
               : 'text-slate-300 hover:bg-slate-800/70',
           isHidden && (isSelected || isHovered ? 'opacity-70' : 'opacity-45'),
+          isIgnored && (isSelected || isHovered ? 'opacity-60' : 'opacity-35'),
           dragOver === 'inside' && 'ring-1 ring-inset ring-sky-400',
           dragOver === 'after' && 'shadow-[inset_0_2px_0_0_#38bdf8]',
           dragOver === 'before' && 'shadow-[inset_0_-2px_0_0_#38bdf8]',
@@ -450,7 +453,13 @@ function TreeRow({ node, depth, ui, anchorRef, onDrop }: TreeRowProps) {
         }}
         onMouseEnter={() => hover(node.id)}
         onMouseLeave={() => hover(null)}
-        title={node.union ? `объединение · ${node.id}` : `${node.tag} · ${node.id}`}
+        title={
+          node.union
+            ? `объединение · ${node.id}`
+            : isIgnored
+              ? `игнорируется (вне модели) · ${node.id}`
+              : `${node.tag} · ${node.id}`
+        }
       >
         <button
           type="button"
@@ -494,7 +503,15 @@ function TreeRow({ node, depth, ui, anchorRef, onDrop }: TreeRowProps) {
             }}
           />
         ) : (
-          <span className={clsx('truncate', isGroup && 'font-medium')}>{node.name}</span>
+          <span
+            className={clsx(
+              'truncate',
+              isGroup && 'font-medium',
+              isIgnored && 'line-through decoration-slate-600',
+            )}
+          >
+            {node.name}
+          </span>
         )}
 
         {isPart && (
@@ -507,18 +524,26 @@ function TreeRow({ node, depth, ui, anchorRef, onDrop }: TreeRowProps) {
           {range ? `${round(range.zFrom)}–${round(range.zTo)}` : ''}
         </span>
 
-        <IconButton
-          label={hiddenByGroup ? 'Скрыто группой' : isHidden ? 'Показать' : 'Скрыть'}
-          stopPropagation
-          disabled={hiddenByGroup}
-          onClick={() => updateSettings(node.id, { hidden: isHidden ? undefined : true })}
-          className={clsx(
-            'h-4 w-4 text-slate-500 hover:bg-slate-700/70 hover:text-slate-100',
-            !isHidden && 'opacity-0 group-hover:opacity-100',
-          )}
-        >
-          {isHidden ? <EyeOffIcon className="h-3.5 w-3.5" /> : <EyeIcon className="h-3.5 w-3.5" />}
-        </IconButton>
+        {/* A piece of a union is not drawn on its own and an ignored element is not in the model at
+            all, so the eye would have nothing to toggle: no button for either of them. */}
+        {!unionOwner && !isIgnored && (
+          <IconButton
+            label={hiddenByGroup ? 'Скрыто группой' : isHidden ? 'Показать' : 'Скрыть'}
+            stopPropagation
+            disabled={hiddenByGroup}
+            onClick={() => updateSettings(node.id, { hidden: isHidden ? undefined : true })}
+            className={clsx(
+              'h-4 w-4 text-slate-500 hover:bg-slate-700/70 hover:text-slate-100',
+              !isHidden && 'opacity-0 group-hover:opacity-100',
+            )}
+          >
+            {isHidden ? (
+              <EyeOffIcon className="h-3.5 w-3.5" />
+            ) : (
+              <EyeIcon className="h-3.5 w-3.5" />
+            )}
+          </IconButton>
+        )}
       </div>
 
       {expanded &&

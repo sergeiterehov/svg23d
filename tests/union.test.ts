@@ -106,10 +106,18 @@ describe('union resolving', () => {
     expect(leaf.color).toBe('#123456');
   });
 
-  it('leaves a hidden part out of the merged body', () => {
+  it('drops an ignored part from the merged body', () => {
+    const document = applyTreeEdit(parse(), unionEdit);
+    const leaf = resolve(document, { b: { ignored: true } }).leaves[0];
+    expect(leaf.unionSources).toBeUndefined();
+  });
+
+  it('keeps a hidden part in the merged body — «Скрыть» is a view flag', () => {
     const document = applyTreeEdit(parse(), unionEdit);
     const leaf = resolve(document, { b: { hidden: true } }).leaves[0];
-    expect(leaf.unionSources).toBeUndefined();
+    expect(leaf.unionSources).toHaveLength(1);
+    // A piece is not drawn on its own, so hiding it cannot hide it from the merged body either.
+    expect(leaf.hidden).toBe(false);
   });
 
   it('lifts the pieces up when «Разъединить» dissolves the union', () => {

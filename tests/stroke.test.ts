@@ -145,7 +145,7 @@ describe('name.svg (fill and stroke in one colour)', () => {
     // The union body is thicker than the fill alone: the stroke band is part of it.
     const fillOnly = resolveLeaves({
       document,
-      settings: { 'pi_stroke#stroke': { hidden: true } },
+      settings: { 'pi_stroke#stroke': { ignored: true } },
       global: DEFAULT_GLOBAL_SETTINGS,
     });
     expect(buildModel({ api, leaves: fillOnly.leaves }).stats.volume).toBeLessThan(

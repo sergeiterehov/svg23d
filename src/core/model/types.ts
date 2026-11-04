@@ -96,10 +96,17 @@ export interface NodeSettings {
   chamferBottom?: number;
   /** Marks the start of a new printed part. */
   isPart?: boolean;
-  /** Soft hide: excluded from the model but kept in the project. */
+  /**
+   * View-only: the element is not drawn in 3D, but the model does not change — it still cuts its
+   * sockets, is counted in the details and goes into an export. Inherited «липко» by a subtree.
+   */
   hidden?: boolean;
+  /**
+   * Excluded from the model altogether — the same result as deleting the element, but the node stays
+   * in the project (ADR-0035). Inherited «липко» by a subtree.
+   */
+  ignored?: boolean;
   colorOverride?: string;
-  enabled?: boolean;
   /** Manual paint order override for this node's children (ids). */
   childOrder?: string[];
   /** The row is folded in the layer tree. Interface state, but it belongs to the project. */
@@ -178,6 +185,11 @@ export interface ResolvedLeaf {
   clearance: number;
   chamferTop: number;
   chamferBottom: number;
+  /**
+   * Not drawn in the 3D view («Скрыть»). The leaf still takes part in the model: it is extruded, cut
+   * and merged into its part like any other, which is why the solver also returns a display mesh.
+   */
+  hidden: boolean;
   /** Optional mask: the extruded area is intersected with `include` and `exclude` is subtracted. */
   mask?: { include: Contour[]; exclude: Contour[] };
 }
