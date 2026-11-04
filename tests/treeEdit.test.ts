@@ -210,6 +210,17 @@ describe('moves combined with deletions', () => {
   });
 });
 
+describe('findPartRoots', () => {
+  it('walks the parts in the manual child order, not in the raw child order', () => {
+    const base = document();
+    const doc = applyTreeEdit(base, EMPTY_TREE_EDIT);
+    const settings = { top: { childOrder: ['inner', 'a', 'b'] } };
+    expect(findPartRoots(doc.root, settings)).toEqual(['inner', 'a', 'b']);
+    // Without the override the document order wins.
+    expect(findPartRoots(doc.root, {})).toEqual(['a', 'b', 'inner']);
+  });
+});
+
 describe('orderKeyFor', () => {
   it('keys the top level by the root node id, not by the empty string', () => {
     const doc = applyTreeEdit(document(), EMPTY_TREE_EDIT);

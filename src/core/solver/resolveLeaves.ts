@@ -60,7 +60,13 @@ export function computeDefaultPartRoots(root: SvgDocNode): Set<string> {
   return roots;
 }
 
-/** Ids of the nodes that start a printed part, in document order. */
+/**
+ * Ids of the nodes that start a printed part, in paint order.
+ *
+ * The walk follows `orderedChildren`, not the raw child arrays: manual order (`settings.childOrder`,
+ * written by dragging rows in the tree) has to reach the solver too, otherwise the parts are stacked
+ * in one order while the tree shows another.
+ */
 export function findPartRoots(root: SvgDocNode, settings: Record<string, NodeSettings>): string[] {
   const explicit = hasExplicitParts(root, settings);
   const defaults = explicit ? new Set<string>() : computeDefaultPartRoots(root);
@@ -70,7 +76,7 @@ export function findPartRoots(root: SvgDocNode, settings: Record<string, NodeSet
       result.push(node.id);
       return;
     }
-    for (const child of node.children) walk(child);
+    for (const child of orderedChildren(node, settings)) walk(child);
   };
   walk(root);
   return result.length > 0 ? result : [root.id];

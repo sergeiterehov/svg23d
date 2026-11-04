@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import clsx from 'clsx';
-import type { SvgDocNode } from '@core/model/types';
+import type { NodeSettings, SvgDocNode } from '@core/model/types';
 import { effectiveSettingsFor } from '@core/solver/inheritance';
 import { orderedChildren } from '@core/solver/order';
 import { useProjectStore } from '../../store/useProjectStore';
@@ -34,10 +34,15 @@ interface TreeUi {
 }
 
 /** Display order of the rows (top row = drawn last = cuts into everything below, ADR-0004). */
-function flattenRows(node: SvgDocNode, collapsed: Set<string>, out: string[] = []): string[] {
-  for (const child of [...node.children].reverse()) {
+function flattenRows(
+  node: SvgDocNode,
+  settings: Record<string, NodeSettings>,
+  collapsed: Set<string>,
+  out: string[] = [],
+): string[] {
+  for (const child of [...orderedChildren(node, settings)].reverse()) {
     out.push(child.id);
-    if (!collapsed.has(child.id)) flattenRows(child, collapsed, out);
+    if (!collapsed.has(child.id)) flattenRows(child, settings, collapsed, out);
   }
   return out;
 }
@@ -53,7 +58,7 @@ export function LayerTree() {
   /** Last row clicked without Shift: the range starts there. */
   const anchorRef = useRef<string | null>(null);
   const rows = useMemo(
-    () => (project ? flattenRows(project.document.root, collapsed) : []),
+    () => (project ? flattenRows(project.document.root, project.settings, collapsed) : []),
     [project, collapsed],
   );
   const rowIndex = useMemo(() => new Map(rows.map((id, index) => [id, index])), [rows]);
