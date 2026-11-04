@@ -6,6 +6,7 @@ import { OutlinePass } from 'three/addons/postprocessing/OutlinePass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import type { PartMesh, ViewLighting, ViewMaterial, ViewProjection } from '@core/model/types';
 import { createNavCube, type NavCubeHandle } from './navCube';
+import { createHeightHandles, type HeightHandleSide } from './heightHandles';
 
 export interface ViewOptions {
   material: ViewMaterial;
@@ -44,6 +45,13 @@ export interface ViewerOptions {
   onPartClick?: (partId: string) => void;
   /** ⌘/Ctrl-click on a part: add it to the selection instead of replacing it. */
   onPartAdd?: (partId: string) => void;
+  /** Drag start on a 3D height arrow: the top one edits «до», the bottom one «от». */
+  onHeightDragStart?: (side: HeightHandleSide) => void;
+  /** Drag progress, in mm from the start point, already snapped to `heightStepMm`. */
+  onHeightDrag?: (side: HeightHandleSide, deltaMm: number) => void;
+  onHeightDragEnd?: (side: HeightHandleSide) => void;
+  /** Snap of the drag, in mm (0.5 by default). */
+  heightStepMm?: number;
   view?: ViewOptions;
 }
 
@@ -61,6 +69,10 @@ export function createViewer(container: HTMLElement, options: ViewerOptions = {}
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color('#0b1120');
+
+  // Arrows on the model itself: raise «до» / lower «от».
+  const handles = createHeightHandles();
+  scene.add(handles.group);
 
   const aspectRatio = (): number => (container.clientWidth || 1) / (container.clientHeight || 1);
 
@@ -115,23 +127,62 @@ export function createViewer(container: HTMLElement, options: ViewerOptions = {}
   let pressX = 0;
   let pressY = 0;
   let pressAt = 0;
+  let heightDrag: { side: HeightHandleSide; startY: number; applied: number } | null = null;
 
-  const handlePointerDown = (event: PointerEvent): void => {
-    pressX = event.clientX;
-    pressY = event.clientY;
-    pressAt = performance.now();
+  /** World millimetres per screen pixel — converts a vertical drag into a height change. */
+  const worldPerPixel = (): number => {
+    const height = container.clientHeight || 1;
+    if (camera === ortho) return (ortho.top - ortho.bottom) / ortho.zoom / height;
+    const distance = camera.position.distanceTo(controls.target);
+    return (2 * distance * Math.tan(THREE.MathUtils.degToRad(perspective.fov) / 2)) / height;
   };
 
-  const handlePointerUp = (event: PointerEvent): void => {
-    const moved = Math.hypot(event.clientX - pressX, event.clientY - pressY);
-    if (moved > 5 || performance.now() - pressAt > 700) return;
+  const pointAt = (event: PointerEvent): boolean => {
     const rect = canvas.getBoundingClientRect();
-    if (rect.width === 0 || rect.height === 0) return;
+    if (rect.width === 0 || rect.height === 0) return false;
     pointer.set(
       ((event.clientX - rect.left) / rect.width) * 2 - 1,
       -((event.clientY - rect.top) / rect.height) * 2 + 1,
     );
     raycaster.setFromCamera(pointer, camera);
+    return true;
+  };
+
+  const handlePointerDown = (event: PointerEvent): void => {
+    pressX = event.clientX;
+    pressY = event.clientY;
+    pressAt = performance.now();
+
+    // Grabbing an arrow starts a height drag: orbiting is paused until the pointer is released.
+    if (!pointAt(event)) return;
+    const side = handles.hit(raycaster);
+    if (!side) return;
+    heightDrag = { side, startY: event.clientY, applied: 0 };
+    controls.enabled = false;
+    canvas.setPointerCapture(event.pointerId);
+    canvas.style.cursor = 'ns-resize';
+    options.onHeightDragStart?.(side);
+  };
+
+  const endHeightDrag = (event: PointerEvent): boolean => {
+    if (!heightDrag) return false;
+    const side = heightDrag.side;
+    heightDrag = null;
+    handles.setDragOffset(null, 0);
+    controls.enabled = true;
+    canvas.style.cursor = '';
+    if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
+    options.onHeightDragEnd?.(side);
+    return true;
+  };
+
+  const handlePointerUp = (event: PointerEvent): void => {
+    if (endHeightDrag(event)) return;
+
+    const moved = Math.hypot(event.clientX - pressX, event.clientY - pressY);
+    if (moved > 5 || performance.now() - pressAt > 700) return;
+    if (!pointAt(event)) return;
+
     const hits = raycaster.intersectObjects(partsGroup.children, false);
     if (hits.length === 0) {
       options.onBackgroundClick?.();
@@ -143,8 +194,32 @@ export function createViewer(container: HTMLElement, options: ViewerOptions = {}
     else options.onPartClick?.(partId);
   };
 
+  const handlePointerMove = (event: PointerEvent): void => {
+    if (heightDrag) {
+      const step = options.heightStepMm ?? 0.5;
+      const raw = (heightDrag.startY - event.clientY) * worldPerPixel();
+      const snapped = Math.round(raw / step) * step;
+      if (snapped !== heightDrag.applied) {
+        heightDrag.applied = snapped;
+        handles.setDragOffset(heightDrag.side, snapped);
+        options.onHeightDrag?.(heightDrag.side, snapped);
+      }
+      return;
+    }
+    if (event.buttons !== 0 || !pointAt(event)) return;
+    const side = handles.hit(raycaster);
+    handles.setHovered(side);
+    canvas.style.cursor = side ? 'ns-resize' : '';
+  };
+
   canvas.addEventListener('pointerdown', handlePointerDown);
   canvas.addEventListener('pointerup', handlePointerUp);
+  canvas.addEventListener('pointermove', handlePointerMove);
+  canvas.addEventListener('pointercancel', (event) => endHeightDrag(event));
+  canvas.addEventListener('pointerleave', () => {
+    handles.setHovered(null);
+    canvas.style.cursor = '';
+  });
 
   const ambient = new THREE.AmbientLight(0xffffff, 0.35);
   scene.add(ambient);
@@ -417,11 +492,14 @@ export function createViewer(container: HTMLElement, options: ViewerOptions = {}
       // SVG coordinates start at the top-left corner, so without this the model sits in the
       // corner of the plate instead of on its centre.
       partsGroup.position.set(0, 0, 0);
+      let bounds = new THREE.Box3().setFromCenterAndSize(new THREE.Vector3(), new THREE.Vector3());
       if (partsGroup.children.length > 0) {
-        const bounds = new THREE.Box3().setFromObject(partsGroup);
+        bounds = new THREE.Box3().setFromObject(partsGroup);
         const center = bounds.getCenter(new THREE.Vector3());
         partsGroup.position.set(-center.x, -center.y, 0);
+        bounds = new THREE.Box3().setFromObject(partsGroup);
       }
+      handles.update(bounds);
       updateGrid();
       // Re-frame only for the first model or when the document itself changed; otherwise the
       // user's camera must survive every settings change and rebuild.
@@ -463,8 +541,10 @@ export function createViewer(container: HTMLElement, options: ViewerOptions = {}
       observer.disconnect();
       navCube?.dispose();
       navCube = null;
+      handles.dispose();
       canvas.removeEventListener('pointerdown', handlePointerDown);
       canvas.removeEventListener('pointerup', handlePointerUp);
+      canvas.removeEventListener('pointermove', handlePointerMove);
       renderer.setAnimationLoop(null);
       disposeParts();
       outlinePass.selectedObjects = [];

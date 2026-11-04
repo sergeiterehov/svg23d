@@ -26,3 +26,4 @@
 | [0017](0017-projection-and-nav-cube.md) | Проекция 3D-камеры (перспектива/ортогональ) и навигационный куб | Accepted |
 | [0018](0018-distribute-layers.md) | «Разложить по слоям»: лестница 5 мм с заходом 1 мм в слой ниже | Accepted |
 | [0019](0019-multi-selection-and-deltas.md) | Множественный выбор и дельты в числовых полях | Accepted |
+| [0020](0020-height-arrows-on-model.md) | Стрелки высоты на самой 3D-модели | Accepted |

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react';
-import { useProjectStore } from '../../store/useProjectStore';
+import { useProjectStore, HEIGHT_STEP_MM } from '../../store/useProjectStore';
 import { createViewer, type ViewerHandle } from '@viewer/createViewer';
 import { partIdForSelection } from '@core/solver/selection';
 
@@ -7,6 +7,7 @@ export function Preview3D() {
   const containerRef = useRef<HTMLDivElement>(null);
   const navCubeRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<ViewerHandle | null>(null);
+  const heightDragRef = useRef<{ side: 'top' | 'bottom'; applied: number } | null>(null);
   const result = useProjectStore((s) => s.result);
   const select = useProjectStore((s) => s.select);
   const toggleSelected = useProjectStore((s) => s.toggleSelected);
@@ -25,6 +26,23 @@ export function Preview3D() {
       onBackgroundClick: () => select(null),
       onPartClick: (partId) => select(partId),
       onPartAdd: (partId) => toggleSelected(partId),
+      heightStepMm: HEIGHT_STEP_MM,
+      // Dragging an arrow on the model changes «от»/«до»; each 0.5 mm applies as a relative step,
+      // so a multi-selection keeps its per-element differences.
+      onHeightDragStart: (side) => {
+        heightDragRef.current = { side, applied: 0 };
+      },
+      onHeightDrag: (side, deltaMm) => {
+        const drag = heightDragRef.current;
+        if (!drag || drag.side !== side) return;
+        const diff = deltaMm - drag.applied;
+        if (diff === 0) return;
+        drag.applied = deltaMm;
+        useProjectStore.getState().nudgeHeight(side === 'top' ? 'zTo' : 'zFrom', diff);
+      },
+      onHeightDragEnd: () => {
+        heightDragRef.current = null;
+      },
     });
     viewerRef.current = viewer;
     const detachCube = navCubeRef.current ? viewer.mountNavCube(navCubeRef.current) : null;

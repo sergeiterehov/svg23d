@@ -21,6 +21,8 @@ import {
 import { parseSvg, SvgParseError } from '@core/svg/parseSvg';
 import { createEmptyDocument, createEmptyProject, isEmptyDocument } from '@core/model/empty';
 import { resolveLeaves, type PartInfo } from '@core/solver/resolveLeaves';
+import { findNode } from '@core/solver/resolveLeaves';
+import { effectiveSettingsFor } from '@core/solver/inheritance';
 import { findParent, shiftChildOrder } from '@core/solver/order';
 import { distributeLayers } from '@core/solver/distribute';
 import { writeThreeMf } from '@core/export/threemf';
@@ -60,6 +62,8 @@ export const EXAMPLES: Record<
 };
 
 const REBUILD_DEBOUNCE_MS = 140;
+/** Step of the height arrows drawn on the model, in mm. */
+export const HEIGHT_STEP_MM = 0.5;
 const HISTORY_LIMIT = 60;
 /** Consecutive edits of the same field within this window form one undo step. */
 const HISTORY_COALESCE_MS = 800;
@@ -112,6 +116,8 @@ interface AppState {
   updateSettings: (nodeId: string, patch: NodeSettings) => void;
   /** Applies per-node patches as one undo step (multi-selection editing). */
   updateSettingsBatch: (patches: Record<string, NodeSettings>) => void;
+  /** Preview arrows: shift «от»/«до» of the selection, or of the project defaults when nothing is selected. */
+  nudgeHeight: (key: 'zFrom' | 'zTo', delta: number) => void;
   updateGlobal: (patch: Partial<GlobalSettings>) => void;
   /** Display-only settings: never schedule a rebuild. */
   updateView: (patch: Partial<ViewSettings>) => void;
@@ -280,6 +286,37 @@ export const useProjectStore = create<AppState>()((set, get) => ({
     pushHistory(set, get, 'distribute');
     set({ project: { ...project, settings } });
     scheduleRebuild(set, get, 0);
+  },
+
+  nudgeHeight: (key, delta) => {
+    const { project, selectedIds } = get();
+    if (!project) return;
+    const nodes = selectedIds
+      .map((id) => findNode(project.document.root, id))
+      .filter((node): node is NonNullable<typeof node> => node !== null);
+
+    // Nothing selected → the arrows edit the project defaults, which is what a new import uses.
+    if (nodes.length === 0) {
+      if (key === 'zFrom') {
+        get().updateGlobal({ defaultZFrom: roundToStep(project.global.defaultZFrom + delta) });
+      } else {
+        get().updateGlobal({ defaultZTo: roundToStep(project.global.defaultZTo + delta) });
+      }
+      return;
+    }
+
+    const patches: Record<string, NodeSettings> = {};
+    for (const node of nodes) {
+      const effective = effectiveSettingsFor(
+        project.document.root,
+        project.settings,
+        project.global,
+        node.id,
+      );
+      if (!effective) continue;
+      patches[node.id] = { [key]: roundToStep(effective[key] + delta) };
+    }
+    get().updateSettingsBatch(patches);
   },
 
   updateSettingsBatch: (patches) => {
@@ -475,4 +512,9 @@ async function runRebuild(set: SetState, get: GetState): Promise<void> {
     if (error instanceof BuildCancelledError) return;
     set({ status: 'error', error: error instanceof Error ? error.message : String(error) });
   }
+}
+
+/** Heights are edited in 0.5 mm steps, so trim float noise from repeated nudges. */
+export function roundToStep(value: number): number {
+  return Math.round(value * 100) / 100;
 }
