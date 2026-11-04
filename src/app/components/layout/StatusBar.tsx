@@ -61,15 +61,7 @@ export function StatusBar() {
         />
 
         <div className="ml-auto flex items-center gap-1">
-          <IconButton
-            label="Пересчитать модель"
-            onClick={rebuild}
-            disabled={!project || status === 'empty'}
-            className="h-6 w-6 hover:bg-slate-800 hover:text-slate-100"
-          >
-            <ResetIcon className="h-3.5 w-3.5" />
-          </IconButton>
-
+          {/* Warnings come first so the rebuild button keeps the rightmost place whatever happens. */}
           {uniqueWarnings.length > 0 && (
             <button
               type="button"
@@ -82,6 +74,15 @@ export function StatusBar() {
               предупреждений: {uniqueWarnings.length}
             </button>
           )}
+
+          <IconButton
+            label="Пересчитать модель"
+            onClick={rebuild}
+            disabled={!project || status === 'empty'}
+            className="h-6 w-6 hover:bg-slate-800 hover:text-slate-100"
+          >
+            <ResetIcon className="h-3.5 w-3.5" />
+          </IconButton>
         </div>
       </div>
     </footer>
