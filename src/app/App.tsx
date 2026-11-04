@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import clsx from 'clsx';
 import { useProjectStore } from './store/useProjectStore';
 import { isEmptyDocument } from '@core/model/empty';
@@ -18,6 +18,8 @@ export default function App() {
   const viewMode = useProjectStore((s) => s.viewMode);
   const setViewMode = useProjectStore((s) => s.setViewMode);
   const select = useProjectStore((s) => s.select);
+  // The picker lives here, next to the shortcut, and the toolbar button uses the same input.
+  const fileInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
@@ -33,6 +35,10 @@ export default function App() {
         const state = useProjectStore.getState();
         if (event.shiftKey) state.redo();
         else state.undo();
+      } else if (key === 'y' && !inField) {
+        // Windows-style redo as well as ⇧⌘Z.
+        event.preventDefault();
+        useProjectStore.getState().redo();
       } else if (key === 'a' && !inField) {
         // Select every printable part, the same set the tree and the 3D view show as elements.
         event.preventDefault();
@@ -40,6 +46,10 @@ export default function App() {
       } else if (key === 's') {
         event.preventDefault();
         useProjectStore.getState().saveProject();
+      } else if (key === 'o') {
+        // Opening a file is only meaningful when nothing is being typed.
+        event.preventDefault();
+        if (!inField) fileInput.current?.click();
       }
     };
     window.addEventListener('keydown', onKeyDown);
@@ -48,7 +58,27 @@ export default function App() {
 
   return (
     <div className="flex h-full flex-col bg-slate-950 text-slate-200">
-      <Toolbar />
+      <Toolbar onOpenFile={() => fileInput.current?.click()} />
+
+      <input
+        ref={fileInput}
+        type="file"
+        accept=".json,.svg,application/json,image/svg+xml"
+        className="hidden"
+        aria-label="Открыть SVG или проект"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          if (file) {
+            // The upload panel only exists for an empty document, so replacing the SVG goes through
+            // this file picker too.
+            const state = useProjectStore.getState();
+            if (/\.svg$/i.test(file.name))
+              void file.text().then((text) => state.loadSvgText(text, file.name));
+            else void file.text().then((text) => state.openProject(text));
+          }
+          event.target.value = '';
+        }}
+      />
 
       <div className="flex min-h-0 flex-1">
         <aside className="flex w-72 shrink-0 flex-col border-r border-slate-800 bg-slate-950">

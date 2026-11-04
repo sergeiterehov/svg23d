@@ -1,4 +1,3 @@
-import { useRef } from 'react';
 import clsx from 'clsx';
 import { useProjectStore } from '../../store/useProjectStore';
 import { OpenIcon, RedoIcon, SaveIcon, UndoIcon } from '../common/Icon';
@@ -8,7 +7,12 @@ import { useTooltip } from '../common/Tooltip';
 const iconClass =
   'h-7 w-7 rounded-md border border-transparent hover:border-slate-700 hover:bg-slate-800 hover:text-slate-100';
 
-export function Toolbar() {
+interface ToolbarProps {
+  /** Opens the file picker: the input itself lives in `App`, where the shortcut lives too. */
+  onOpenFile: () => void;
+}
+
+export function Toolbar({ onOpenFile }: ToolbarProps) {
   const project = useProjectStore((s) => s.project);
   const result = useProjectStore((s) => s.result);
   const past = useProjectStore((s) => s.past);
@@ -18,9 +22,6 @@ export function Toolbar() {
   const undo = useProjectStore((s) => s.undo);
   const redo = useProjectStore((s) => s.redo);
   const saveProject = useProjectStore((s) => s.saveProject);
-  const openProject = useProjectStore((s) => s.openProject);
-  const loadSvgText = useProjectStore((s) => s.loadSvgText);
-  const fileInput = useRef<HTMLInputElement>(null);
   const exportTip = useTooltip(
     '3MF: отдельные объекты и цвета — для Bambu Studio и других слайсеров',
   );
@@ -61,8 +62,8 @@ export function Toolbar() {
 
         <div className="flex items-center gap-0.5">
           <IconButton
-            label="Открыть SVG или проект (.svg23d.json)"
-            onClick={() => fileInput.current?.click()}
+            label="Открыть SVG или проект (⌘O)"
+            onClick={onOpenFile}
             className={iconClass}
           >
             <OpenIcon className="h-4 w-4" />
@@ -109,23 +110,6 @@ export function Toolbar() {
         </button>
         {stlTip.tooltip}
       </div>
-
-      <input
-        ref={fileInput}
-        type="file"
-        accept=".json,.svg,application/json,image/svg+xml"
-        className="hidden"
-        onChange={(event) => {
-          const file = event.target.files?.[0];
-          if (file) {
-            // The upload panel is only visible for an empty document, so replacing the SVG
-            // goes through this file picker too.
-            if (/\.svg$/i.test(file.name)) void file.text().then((text) => loadSvgText(text, file.name));
-            else void file.text().then(openProject);
-          }
-          event.target.value = '';
-        }}
-      />
     </header>
   );
 }
