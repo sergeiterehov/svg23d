@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 150" width="200" height="150">
+  <g id="landscape">
+    <rect id="sky" x="0" y="0" width="200" height="150" fill="#bfe3f7"/>
+    <circle id="sun" cx="158" cy="36" r="18" fill="#f5c542"/>
+    <path id="hill" d="M0 112 C 36 74, 78 68, 118 96 C 146 116, 176 112, 200 100 L200 150 L0 150 Z" fill="#4caf50"/>
+    <rect id="trunk" x="88" y="86" width="10" height="32" fill="#6d4c41"/>
+    <circle id="crown" cx="93" cy="70" r="23" fill="#2ecc71"/>
+    <circle id="crown-2" cx="72" cy="80" r="13" fill="#27ae60"/>
+  </g>
+</svg>

@@ -1,0 +1,173 @@
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import clsx from 'clsx';
+
+/**
+ * Minimal inline icon set (no external dependency) plus the "?" help hint used to keep
+ * labels short: the explanation lives in a tooltip instead of a paragraph of text.
+ */
+
+interface IconProps {
+  className?: string;
+}
+
+const base = 'shrink-0';
+
+function Svg({ className, children }: IconProps & { children: React.ReactNode }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className={clsx(base, className)}
+    >
+      {children}
+    </svg>
+  );
+}
+
+export function ResetIcon({ className }: IconProps) {
+  return (
+    <Svg className={className}>
+      <path d="M3 12a9 9 0 1 0 2.6-6.4" />
+      <path d="M3 4v5h5" />
+    </Svg>
+  );
+}
+
+export function ChevronUpIcon({ className }: IconProps) {
+  return (
+    <Svg className={className}>
+      <path d="m6 15 6-6 6 6" />
+    </Svg>
+  );
+}
+
+export function ChevronDownIcon({ className }: IconProps) {
+  return (
+    <Svg className={className}>
+      <path d="m6 9 6 6 6-6" />
+    </Svg>
+  );
+}
+
+export function UndoIcon({ className }: IconProps) {
+  return (
+    <Svg className={className}>
+      <path d="M9 14 4 9l5-5" />
+      <path d="M4 9h10a6 6 0 0 1 0 12h-3" />
+    </Svg>
+  );
+}
+
+export function RedoIcon({ className }: IconProps) {
+  return (
+    <Svg className={className}>
+      <path d="m15 14 5-5-5-5" />
+      <path d="M20 9H10a6 6 0 0 0 0 12h3" />
+    </Svg>
+  );
+}
+
+export function SaveIcon({ className }: IconProps) {
+  return (
+    <Svg className={className}>
+      <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z" />
+      <path d="M17 21v-8H7v8" />
+      <path d="M7 3v5h8" />
+    </Svg>
+  );
+}
+
+export function OpenIcon({ className }: IconProps) {
+  return (
+    <Svg className={className}>
+      <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" />
+    </Svg>
+  );
+}
+
+export function EyeIcon({ className }: IconProps) {
+  return (
+    <Svg className={className}>
+      <path d="M2 12s3.5-6.5 10-6.5S22 12 22 12s-3.5 6.5-10 6.5S2 12 2 12Z" />
+      <circle cx="12" cy="12" r="2.5" />
+    </Svg>
+  );
+}
+
+export function EyeOffIcon({ className }: IconProps) {
+  return (
+    <Svg className={className}>
+      <path d="M3 3l18 18" />
+      <path d="M10.6 6.1A9.9 9.9 0 0 1 12 6c6.5 0 10 6 10 6a17 17 0 0 1-2.6 3.3" />
+      <path d="M6.2 7.7A16.6 16.6 0 0 0 2 12s3.5 6.5 10 6.5a9.7 9.7 0 0 0 4.1-.9" />
+    </Svg>
+  );
+}
+
+/**
+ * Small "?" bubble with an instant custom popover (the native `title` tooltip has a long delay).
+ * Rendered through a portal with fixed coordinates so it is never clipped by scrolling panels.
+ */
+export function HelpHint({ text }: { text: string }) {
+  const anchorRef = useRef<HTMLSpanElement>(null);
+  const [position, setPosition] = useState<{ left: number; top: number } | null>(null);
+
+  const open = (): void => {
+    const rect = anchorRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const width = 240;
+    const gap = 8;
+    let left = rect.right + gap;
+    if (left + width > window.innerWidth - gap) left = rect.left - width - gap;
+    left = Math.max(gap, Math.min(left, window.innerWidth - width - gap));
+    const top = Math.max(gap, Math.min(rect.top - 6, window.innerHeight - 140));
+    setPosition({ left, top });
+  };
+  const close = (): void => setPosition(null);
+
+  useEffect(() => {
+    if (!position) return;
+    const hide = (): void => setPosition(null);
+    window.addEventListener('scroll', hide, true);
+    window.addEventListener('resize', hide);
+    return () => {
+      window.removeEventListener('scroll', hide, true);
+      window.removeEventListener('resize', hide);
+    };
+  }, [position]);
+
+  return (
+    <>
+      <span
+        ref={anchorRef}
+        role="img"
+        aria-label={text}
+        tabIndex={0}
+        onMouseEnter={open}
+        onMouseLeave={close}
+        onFocus={open}
+        onBlur={close}
+        className="inline-grid h-3.5 w-3.5 shrink-0 cursor-help place-items-center rounded-full border border-slate-600 text-[9px] leading-none text-slate-400 outline-none hover:border-slate-400 hover:text-slate-200 focus-visible:border-sky-500"
+      >
+        ?
+      </span>
+      {position &&
+        createPortal(
+          <span
+            role="tooltip"
+            style={{ left: position.left, top: position.top }}
+            className="pointer-events-none fixed z-50 block w-60 rounded-md border border-slate-700 bg-slate-900/98 px-2.5 py-2 text-[11px] leading-snug text-slate-200 shadow-xl"
+          >
+            {text}
+          </span>,
+          document.body,
+        )}
+    </>
+  );
+}
