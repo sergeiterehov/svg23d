@@ -10,6 +10,7 @@ import {
   type PartMesh,
   type Project,
   type ResolvedLeaf,
+  type SvgDocument,
   type ViewSettings,
 } from '@core/model/types';
 import {
@@ -25,7 +26,16 @@ import { resolveLeaves, type PartInfo } from '@core/solver/resolveLeaves';
 import { findNode } from '@core/solver/resolveLeaves';
 import { findPartRoots } from '@core/solver/resolveLeaves';
 import { effectiveSettingsFor } from '@core/solver/inheritance';
-import { findParent, shiftChildOrder } from '@core/solver/order';
+import { orderedChildren } from '@core/solver/order';
+import {
+  EMPTY_TREE_EDIT,
+  applyTreeEdit,
+  createGroup,
+  moveNodeInTree,
+  removeFromTree,
+  renameInTree,
+  type TreeEdit,
+} from '@core/model/treeEdit';
 import { distributeLayers } from '@core/solver/distribute';
 import { reducePalette, paletteUsage, type PaletteEntry } from '@core/color/palette';
 import { writeThreeMf } from '@core/export/threemf';
@@ -74,6 +84,7 @@ const HISTORY_COALESCE_MS = 800;
 interface Snapshot {
   settings: Record<string, NodeSettings>;
   global: GlobalSettings;
+  tree: TreeEdit;
 }
 
 let client: GeometryClient | null = null;
@@ -97,6 +108,8 @@ export interface BuildResultState {
 
 interface AppState {
   project: Project | null;
+  /** Parsed markup the structural overlay is applied to; recomputed on import, never saved. */
+  baseDocument: SvgDocument;
   leaves: ResolvedLeaf[];
   parts: PartInfo[];
   modelSize: { widthMm: number; heightMm: number } | null;
@@ -117,7 +130,14 @@ interface AppState {
   saveProject: () => void;
   undo: () => void;
   redo: () => void;
-  shiftNode: (nodeId: string, direction: 1 | -1) => void;
+  /** Wraps the selection in a new group (⌘G) and selects it. */
+  groupSelected: () => void;
+  /** Renames an element or a group; empty names are ignored. */
+  renameNode: (nodeId: string, name: string) => void;
+  /** Drag & drop: puts `nodeId` next to `targetId` or inside it when it is a group. */
+  moveNode: (nodeId: string, targetId: string, position: 'before' | 'after' | 'inside') => void;
+  /** Deletes the selected elements and their subtrees. */
+  removeSelected: () => void;
   distributeZ: () => void;
   /** Colours actually used by the model, each with the area it covers in mm² (ADR-0024). */
   paletteUsage: () => PaletteEntry[];
@@ -154,6 +174,8 @@ interface AppState {
 
 export const useProjectStore = create<AppState>()((set, get) => ({
   project: createEmptyProject(),
+  // The parsed markup the structural edits are applied to (never part of the project file).
+  baseDocument: createEmptyDocument(),
   leaves: [],
   parts: [],
   modelSize: null,
@@ -173,18 +195,21 @@ export const useProjectStore = create<AppState>()((set, get) => ({
       // Project defaults set before the import survive it: they describe the machine and the
       // material, not the document.
       const global = { ...(get().project?.global ?? DEFAULT_GLOBAL_SETTINGS) };
-      const document = parseSvg(text, { fileName, global });
+      const base = parseSvg(text, { fileName, global });
+      const document = applyTreeEdit(base, EMPTY_TREE_EDIT);
       const project: Project = {
         version: PROJECT_VERSION,
         fileName,
         source: text,
         document,
+        tree: EMPTY_TREE_EDIT,
         settings: {},
         global,
       };
       lastCommit = null;
       set({
         project,
+        baseDocument: base,
         selectedIds: [],
         hoveredId: null,
         result: null,
@@ -207,20 +232,23 @@ export const useProjectStore = create<AppState>()((set, get) => ({
   openProject: (text) => {
     try {
       const file = parseProjectFile(text);
-      const document = file.source.trim()
+      const base = file.source.trim()
         ? parseSvg(file.source, { fileName: file.fileName, global: file.global })
         : createEmptyDocument(file.fileName);
+      const document = applyTreeEdit(base, file.tree);
       const project: Project = {
         version: PROJECT_VERSION,
         fileName: file.fileName,
         source: file.source,
         document,
+        tree: file.tree,
         settings: file.settings,
         global: file.global,
       };
       lastCommit = null;
       set({
         project,
+        baseDocument: base,
         selectedIds: [],
         hoveredId: null,
         result: null,
@@ -249,12 +277,21 @@ export const useProjectStore = create<AppState>()((set, get) => ({
   undo: () => {
     const { project, past, future } = get();
     if (!project || past.length === 0) return;
-    const previous = past[past.length - 1];
+    const previous = past[past.length - 1] as Snapshot;
     lastCommit = null;
     set({
-      project: { ...project, settings: previous.settings, global: previous.global },
+      project: {
+        ...project,
+        settings: previous.settings,
+        global: previous.global,
+        tree: previous.tree,
+        document: applyTreeEdit(get().baseDocument, previous.tree),
+      },
       past: past.slice(0, -1),
-      future: [{ settings: project.settings, global: project.global }, ...future],
+      future: [
+        { settings: project.settings, global: project.global, tree: project.tree },
+        ...future,
+      ],
     });
     scheduleRebuild(set, get, 0);
   },
@@ -262,34 +299,117 @@ export const useProjectStore = create<AppState>()((set, get) => ({
   redo: () => {
     const { project, past, future } = get();
     if (!project || future.length === 0) return;
-    const next = future[0];
+    const next = future[0] as Snapshot;
     lastCommit = null;
     set({
-      project: { ...project, settings: next.settings, global: next.global },
-      past: [...past, { settings: project.settings, global: project.global }],
+      project: {
+        ...project,
+        settings: next.settings,
+        global: next.global,
+        tree: next.tree,
+        document: applyTreeEdit(get().baseDocument, next.tree),
+      },
+      past: [...past, { settings: project.settings, global: project.global, tree: project.tree }],
       future: future.slice(1),
     });
     scheduleRebuild(set, get, 0);
   },
 
-  /** Moves a node one step up/down in the cut order (its parent's manual child order). */
-  shiftNode: (nodeId, direction) => {
-    const { project } = get();
-    if (!project) return;
-    const parent = findParent(project.document.root, nodeId);
-    if (!parent) return;
-    const next = shiftChildOrder(parent, nodeId, direction, project.settings);
-    if (!next) return;
+  groupSelected: () => {
+    const { project, selectedIds } = get();
+    if (!project || selectedIds.length === 0) return;
+    const result = createGroup(project.document, project.tree, selectedIds, '');
+    if (!result) return;
 
-    pushHistory(set, get, `order:${parent.id}`);
+    const parent =
+      result.parentId === ''
+        ? project.document.root
+        : findNode(project.document.root, result.parentId);
+    const siblings = parent
+      ? orderedChildren(parent, project.settings).map((child) => child.id)
+      : [];
+    const moved = new Set(result.movedIds);
+    const anchorIndex = siblings.indexOf(result.anchorId);
+    const before = siblings
+      .slice(0, Math.max(anchorIndex, 0))
+      .filter((id) => !moved.has(id)).length;
+    const order = siblings.filter((id) => !moved.has(id));
+    order.splice(Math.min(before, order.length), 0, result.groupId);
+
+    pushHistory(set, get, 'group');
     set({
       project: {
         ...project,
+        tree: result.edit,
+        document: applyTreeEdit(get().baseDocument, result.edit),
         settings: {
           ...project.settings,
-          [parent.id]: { ...(project.settings[parent.id] ?? {}), childOrder: next },
+          [result.parentId]: { ...(project.settings[result.parentId] ?? {}), childOrder: order },
         },
       },
+      selectedIds: [result.groupId],
+    });
+    scheduleRebuild(set, get, 0);
+  },
+
+  renameNode: (nodeId, name) => {
+    const { project } = get();
+    if (!project) return;
+    const tree = renameInTree(project.document, project.tree, nodeId, name);
+    if (!tree) return;
+    pushHistory(set, get, `rename:${nodeId}`);
+    set({ project: { ...project, tree, document: applyTreeEdit(get().baseDocument, tree) } });
+    scheduleRebuild(set, get, 0);
+  },
+
+  moveNode: (nodeId, targetId, position) => {
+    const { project } = get();
+    if (!project) return;
+    const result = moveNodeInTree(project.document, project.tree, nodeId, targetId, position);
+    if (!result) return;
+    const parent =
+      result.parentId === ''
+        ? project.document.root
+        : findNode(project.document.root, result.parentId);
+    if (!parent) return;
+    const siblings = orderedChildren(parent, project.settings)
+      .map((child) => child.id)
+      .filter((id) => id !== nodeId);
+    const targetIndex = siblings.indexOf(targetId);
+    const index =
+      position === 'inside' || targetIndex < 0
+        ? siblings.length
+        : position === 'before'
+          ? targetIndex
+          : targetIndex + 1;
+    const order = [...siblings];
+    order.splice(index, 0, nodeId);
+
+    pushHistory(set, get, 'move');
+    set({
+      project: {
+        ...project,
+        tree: result.edit,
+        document: applyTreeEdit(get().baseDocument, result.edit),
+        settings: {
+          ...project.settings,
+          [result.parentId]: { ...(project.settings[result.parentId] ?? {}), childOrder: order },
+        },
+      },
+    });
+    scheduleRebuild(set, get, 0);
+  },
+
+  removeSelected: () => {
+    const { project, selectedIds } = get();
+    if (!project || selectedIds.length === 0) return;
+    const tree = removeFromTree(project.tree, selectedIds);
+    if (!tree) return;
+    pushHistory(set, get, 'remove');
+    set({
+      project: { ...project, tree, document: applyTreeEdit(get().baseDocument, tree) },
+      selectedIds: [],
+      hoveredId: null,
     });
     scheduleRebuild(set, get, 0);
   },
@@ -450,6 +570,7 @@ export const useProjectStore = create<AppState>()((set, get) => ({
   reset: () => {
     set({
       project: createEmptyProject(),
+      baseDocument: createEmptyDocument(),
       leaves: [],
       parts: [],
       modelSize: null,
@@ -509,7 +630,10 @@ function pushHistory(set: SetState, get: GetState, key: string): void {
 
   const { past } = get();
   set({
-    past: [...past, { settings: project.settings, global: project.global }].slice(-HISTORY_LIMIT),
+    past: [
+      ...past,
+      { settings: project.settings, global: project.global, tree: project.tree },
+    ].slice(-HISTORY_LIMIT),
     future: [],
   });
 }

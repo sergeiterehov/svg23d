@@ -32,3 +32,4 @@
 | [0023](0023-hover-and-selection-outlines.md) | Наведение и выделение в 3D: белая и голубая обводки                          | Accepted |
 | [0024](0024-palette-reduction.md)            | Уменьшение числа цветов: взвешенный k-means в OKLab                          | Accepted |
 | [0025](0025-footprint-based-supports.md)     | Опоры «Разложить по слоям» по растровому отпечатку                           | Accepted |
+| [0026](0026-tree-editing-overlay.md)         | Группировка, переименование, перемещение и удаление как оверлей              | Accepted |

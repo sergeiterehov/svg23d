@@ -1,6 +1,7 @@
 import type { Project, SvgDocNode, SvgDocument } from './types';
 import { PROJECT_VERSION } from './types';
 import { DEFAULT_GLOBAL_SETTINGS } from './defaults';
+import { EMPTY_TREE_EDIT } from './treeEdit';
 
 /**
  * A project exists from the very first second: it is simply empty (no shapes). That keeps every
@@ -45,6 +46,7 @@ export function createEmptyProject(): Project {
     fileName: UNTITLED_PROJECT_NAME,
     source: '',
     document: createEmptyDocument(),
+    tree: EMPTY_TREE_EDIT,
     settings: {},
     global: {
       ...DEFAULT_GLOBAL_SETTINGS,

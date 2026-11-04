@@ -1,6 +1,7 @@
 import type { GlobalSettings, NodeSettings, Project } from './types';
 import { PROJECT_VERSION } from './types';
 import { DEFAULT_GLOBAL_SETTINGS } from './defaults';
+import type { TreeEdit } from './treeEdit';
 
 /**
  * Project file (`*.svg23d.json`): the source SVG plus user settings.
@@ -17,6 +18,8 @@ export interface ProjectFile {
   source: string;
   global: GlobalSettings;
   settings: Record<string, NodeSettings>;
+  /** Groups, moves, renames and deletions on top of the source SVG (ADR-0026). */
+  tree: TreeEdit;
 }
 
 export const PROJECT_FILE_EXTENSION = 'svg23d.json';
@@ -30,6 +33,7 @@ export function serializeProject(project: Project): string {
     source: project.source,
     global: project.global,
     settings: project.settings,
+    tree: project.tree,
   };
   return JSON.stringify(file, null, 2);
 }
@@ -67,6 +71,17 @@ export function parseProjectFile(text: string): ProjectFile {
     source: candidate.source,
     global: mergeGlobal(candidate.global as Partial<GlobalSettings>),
     settings: (candidate.settings ?? {}) as Record<string, NodeSettings>,
+    tree: mergeTree(candidate.tree),
+  };
+}
+
+/** Structural edits are optional: files saved before they existed simply have none. */
+function mergeTree(raw: Partial<TreeEdit> | undefined): TreeEdit {
+  return {
+    names: raw?.names ?? {},
+    parents: raw?.parents ?? {},
+    groups: raw?.groups ?? [],
+    removed: raw?.removed ?? [],
   };
 }
 

@@ -23,12 +23,23 @@ export default function App() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
-      if (!event.metaKey && !event.ctrlKey) return;
       const target = event.target as HTMLElement | null;
       const inField =
         !!target &&
         (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
       const key = event.key.toLowerCase();
+
+      if (!event.metaKey && !event.ctrlKey) {
+        // Delete / ⌫ remove the selected elements (never while typing).
+        if ((event.key === 'Delete' || event.key === 'Backspace') && !inField) {
+          const state = useProjectStore.getState();
+          if (state.selectedIds.length > 0) {
+            event.preventDefault();
+            state.removeSelected();
+          }
+        }
+        return;
+      }
 
       if (key === 'z' && !inField) {
         event.preventDefault();
@@ -43,6 +54,9 @@ export default function App() {
         // Select every printable part, the same set the tree and the 3D view show as elements.
         event.preventDefault();
         useProjectStore.getState().selectAll();
+      } else if (key === 'g' && !inField) {
+        event.preventDefault();
+        useProjectStore.getState().groupSelected();
       } else if (key === 's') {
         event.preventDefault();
         useProjectStore.getState().saveProject();
@@ -91,12 +105,19 @@ export default function App() {
             className="min-h-0 flex-1 overflow-y-auto"
             onClick={(event) => {
               // Click on empty space below the tree → deselect, so the inspector shows project settings.
-              if (!(event.target as HTMLElement).closest('[data-node-row]')) select(null);
+              // The panel header keeps the selection: its menu acts on the selected elements.
+              const target = event.target as HTMLElement;
+              if (!target.closest('[data-node-row]') && !target.closest('[data-keep-selection]')) {
+                select(null);
+              }
             }}
           >
-            <div className="flex items-center gap-1 px-3 py-2 text-[10px] uppercase tracking-wider text-white">
+            <div
+              className="flex items-center gap-1 px-3 py-2 text-[10px] uppercase tracking-wider text-white"
+              data-keep-selection
+            >
               <span>Слои</span>
-              <HelpHint text="Сверху вниз = порядок вырезания: верхний элемент делает гнёзда в нижних. Стрелки меняют порядок вручную. ⌘/Ctrl-клик добавляет к выбору, Shift-клик выбирает диапазон, ⌘/Ctrl+A — все элементы." />
+              <HelpHint text="Сверху вниз = порядок вырезания: верхний элемент делает гнёзда в нижних. Перетащите строку, чтобы переместить элемент в любую группу. Двойной клик — переименовать. ⌘/Ctrl-клик добавляет к выбору, Shift-клик выбирает диапазон, ⌘/Ctrl+A — все элементы, ⌘G — сгруппировать, Delete — удалить." />
               <LayerTools />
             </div>
             <LayerTree />

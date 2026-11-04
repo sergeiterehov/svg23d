@@ -1,3 +1,5 @@
+import type { TreeEdit } from './treeEdit';
+
 /**
  * Core domain types. These are UI-agnostic: no React, no DOM, no three.js.
  * All geometry that reaches the solver is expressed in millimetres (see ADR-0009).
@@ -126,14 +128,17 @@ export interface GlobalSettings {
   view: ViewSettings;
 }
 
-export const PROJECT_VERSION = 1;
+export const PROJECT_VERSION = 2;
 
 export interface Project {
   version: number;
   fileName: string;
   /** Raw SVG markup, embedded in `.svg23d.json` so the project can be reopened. */
   source: string;
+  /** Parsed markup with the structural edits (`tree`) applied — what the UI and the solver see. */
   document: SvgDocument;
+  /** Groups, moves, renames and deletions on top of the parsed markup (ADR-0026). */
+  tree: TreeEdit;
   settings: Record<string, NodeSettings>;
   global: GlobalSettings;
 }

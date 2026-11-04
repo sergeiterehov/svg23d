@@ -7,6 +7,7 @@ import { PROJECT_VERSION } from '@core/model/types';
 import type { NodeSettings, Project } from '@core/model/types';
 import { parseProjectFile, serializeProject } from '@core/model/project';
 import { createEmptyProject, isEmptyDocument } from '@core/model/empty';
+import { EMPTY_TREE_EDIT } from '@core/model/treeEdit';
 import { parseSvg } from '@core/svg/parseSvg';
 import { resolveLeaves } from '@core/solver/resolveLeaves';
 
@@ -22,12 +23,33 @@ function makeProject(): Project {
     fileName: 'sample.svg',
     source: sample,
     document,
+    tree: EMPTY_TREE_EDIT,
     settings,
     global: { ...DEFAULT_GLOBAL_SETTINGS, fitSizeMm: 80 },
   };
 }
 
 describe('project file', () => {
+  it('keeps structural edits (groups, moves, renames, deletions)', () => {
+    const project = makeProject();
+    const tree = {
+      names: { inner: 'Фон' },
+      parents: { a: 'inner', 'group-1': '' },
+      groups: ['group-1'],
+      removed: ['b'],
+    };
+    const file = parseProjectFile(serializeProject({ ...project, tree }));
+    expect(file.tree).toEqual(tree);
+  });
+
+  it('treats files saved before structural edits as having none', () => {
+    const project = makeProject();
+    const raw = JSON.parse(serializeProject(project)) as Record<string, unknown>;
+    delete raw.tree;
+    const file = parseProjectFile(JSON.stringify(raw));
+    expect(file.tree).toEqual({ names: {}, parents: {}, groups: [], removed: [] });
+  });
+
   it('round-trips source, settings and globals', () => {
     const project = makeProject();
     const text = serializeProject(project);
@@ -81,10 +103,7 @@ describe('project file', () => {
 
   it('migrates the old boolean 2D flag to a mode', () => {
     const project = makeProject();
-    const text = serializeProject(project).replace(
-      '"mode2d": "transparent"',
-      '"opaque2d": true',
-    );
+    const text = serializeProject(project).replace('"mode2d": "transparent"', '"opaque2d": true');
     expect(parseProjectFile(text).global.view.mode2d).toBe('asis');
   });
 
