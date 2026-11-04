@@ -32,6 +32,14 @@ export const EMPTY_TREE_EDIT: TreeEdit = {
 
 const ROOT = '';
 
+/**
+ * `childOrder` lives in `settings`, keyed by node id, while a tree edit says `''` for the document
+ * root — this maps one to the other, so reordering the top level is recorded like any other level.
+ */
+export function orderKeyFor(document: { root: { id: string } }, parentId: string): string {
+  return parentId === ROOT ? document.root.id : parentId;
+}
+
 function cloneNode(node: SvgDocNode, depth: number): SvgDocNode {
   return { ...node, depth, children: node.children.map((child) => cloneNode(child, depth + 1)) };
 }

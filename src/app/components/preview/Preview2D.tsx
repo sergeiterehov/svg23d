@@ -82,7 +82,7 @@ export function Preview2D() {
 
   return (
     <div
-      className="relative h-full w-full overflow-hidden bg-slate-800"
+      className="relative h-full w-full overflow-hidden bg-[#0b1120]"
       onClick={(event) => {
         // Empty space around the artwork → deselect and show project settings.
         if (!(event.target as Element).closest('path')) select(null);

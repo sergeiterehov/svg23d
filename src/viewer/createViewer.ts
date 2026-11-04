@@ -20,6 +20,9 @@ export const DEFAULT_VIEW: ViewOptions = {
   projection: 'perspective',
 };
 
+/** Backdrop of the 3D canvas; keep it in sync with `Preview2D` (`bg-[#0b1120]`) and `body`. */
+export const PREVIEW_BACKGROUND = '#0b1120';
+
 /** Build plate drawn under the model, in mm. */
 const GRID_SIZE_MM = 256;
 const GRID_DIVISIONS = 16;
@@ -87,7 +90,8 @@ export function createViewer(container: HTMLElement, options: ViewerOptions = {}
   container.appendChild(canvas);
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color('#0b1120');
+  // The same background as the 2D preview and the app shell.
+  scene.background = new THREE.Color(PREVIEW_BACKGROUND);
 
   // Arrows on the model itself: raise «до» / lower «от».
   const handles = createHeightHandles();

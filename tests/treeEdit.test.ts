@@ -8,6 +8,7 @@ import {
   createGroup,
   findNodeIn,
   moveNodesInTree,
+  orderKeyFor,
   removeFromTree,
   renameInTree,
 } from '@core/model/treeEdit';
@@ -206,6 +207,14 @@ describe('moves combined with deletions', () => {
     const edited = applyTreeEdit(base, edit);
     expect(findNodeIn(edited.root, 'a')).toBeNull();
     expect(edited.paintOrder).toEqual(['b']);
+  });
+});
+
+describe('orderKeyFor', () => {
+  it('keys the top level by the root node id, not by the empty string', () => {
+    const doc = applyTreeEdit(document(), EMPTY_TREE_EDIT);
+    expect(orderKeyFor(doc, '')).toBe(doc.root.id);
+    expect(orderKeyFor(doc, 'inner')).toBe('inner');
   });
 });
 

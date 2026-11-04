@@ -30,6 +30,7 @@ import { orderedChildren } from '@core/solver/order';
 import {
   EMPTY_TREE_EDIT,
   applyTreeEdit,
+  orderKeyFor,
   createGroup,
   moveNodesInTree,
   removeFromTree,
@@ -336,6 +337,7 @@ export const useProjectStore = create<AppState>()((set, get) => ({
     const order = siblings.filter((id) => !moved.has(id));
     order.splice(Math.min(before, order.length), 0, result.groupId);
 
+    const parentKey = orderKeyFor(project.document, result.parentId);
     pushHistory(set, get, 'group');
     set({
       project: {
@@ -344,7 +346,7 @@ export const useProjectStore = create<AppState>()((set, get) => ({
         document: applyTreeEdit(get().baseDocument, result.edit),
         settings: {
           ...project.settings,
-          [result.parentId]: { ...(project.settings[result.parentId] ?? {}), childOrder: order },
+          [parentKey]: { ...(project.settings[parentKey] ?? {}), childOrder: order },
         },
       },
       selectedIds: [result.groupId],
@@ -387,6 +389,7 @@ export const useProjectStore = create<AppState>()((set, get) => ({
     // The block keeps its internal order (bottom → top).
     order.splice(index, 0, ...result.movedIds);
 
+    const parentKey = orderKeyFor(project.document, result.parentId);
     pushHistory(set, get, 'move');
     set({
       project: {
@@ -395,7 +398,7 @@ export const useProjectStore = create<AppState>()((set, get) => ({
         document: applyTreeEdit(get().baseDocument, result.edit),
         settings: {
           ...project.settings,
-          [result.parentId]: { ...(project.settings[result.parentId] ?? {}), childOrder: order },
+          [parentKey]: { ...(project.settings[parentKey] ?? {}), childOrder: order },
         },
       },
     });
