@@ -13,11 +13,11 @@ const html5 = readFileSync(resolve(process.cwd(), 'samples/html5.svg'), 'utf8');
 const BASE_FROM = DEFAULT_GLOBAL_SETTINGS.defaultZFrom;
 const BASE_TO = DEFAULT_GLOBAL_SETTINGS.defaultZTo;
 
-/** Element with no intersections rests on the project defaults. */
+/** Element that intersects nothing: it stands on the project base. */
 const base: [number, number] = [BASE_FROM, BASE_TO];
-/** Element built on top of intersections whose highest top is `BASE_TO`. */
-function above(steps = 1): [number, number] {
-  return [BASE_FROM, BASE_TO + steps * LAYER_MM];
+/** Element standing on the base whose top is `steps` × 5 mm above the base top. */
+function standing(steps = 1): [number, number] {
+  return [BASE_TO, BASE_TO + steps * LAYER_MM];
 }
 
 function ranges(source: string): Record<string, [number, number]> {
@@ -32,29 +32,37 @@ function ranges(source: string): Record<string, [number, number]> {
 
 describe('distributeLayers', () => {
   it('derives each landscape height from what the element intersects', () => {
-    // sky is the plate; sun and hill only meet the sky, so both end 5 mm above it; the trunk is
-    // crossed by the crowns, so each crown ends above the trunk instead of the other way round.
+    // Only the sky stands on the base; everything else rests on the top of what is under it, and the
+    // trunk stops 5 mm above the highest crown it is crossed by — it stays underneath the crowns.
     expect(ranges(landscape)).toEqual({
       sky: base,
-      sun: above(1),
-      hill: above(1),
-      trunk: above(2),
-      crown: above(3),
-      'crown-2': above(4),
+      sun: standing(1),
+      hill: standing(1),
+      trunk: standing(2),
+      crown: standing(3),
+      'crown-2': standing(4),
     });
   });
 
+  it('keeps zero bottoms only for the elements that reach the base', () => {
+    const result = ranges(landscape);
+    expect(result.sky[0]).toBe(BASE_FROM);
+    for (const [id, range] of Object.entries(result)) {
+      if (id === 'sky') continue;
+      expect(range[0]).toBeGreaterThan(BASE_FROM);
+    }
+  });
+
   it('puts every later HTML5 shape above the ones it overlaps', () => {
-    const result = ranges(html5);
-    const values = Object.values(result);
+    const values = Object.values(ranges(html5));
     expect(values[0]).toEqual(base);
-    for (const value of values.slice(1)) expect(value[0]).toBe(BASE_FROM);
-    // Tops strictly grow along the paint order (each shape overlaps the previous one).
+    for (const value of values.slice(1)) expect(value[0]).toBe(BASE_TO);
+    // Tops never go down along the paint order (each shape overlaps one of the previous ones).
     const tops = values.map((value) => value[1]);
     for (let i = 1; i < tops.length; i += 1) expect(tops[i]).toBeGreaterThanOrEqual(tops[i - 1]);
   });
 
-  it('keeps fully disjoint elements on the project defaults', () => {
+  it('keeps fully disjoint elements on the project base', () => {
     const source =
       '<svg viewBox="0 0 100 100"><g>' +
       '<rect x="0" y="0" width="40" height="40"/>' +
@@ -65,17 +73,17 @@ describe('distributeLayers', () => {
     for (const range of values) expect(range).toEqual(base);
   });
 
-  it('spans from the lowest bottom to 5 mm above the highest top of the intersections', () => {
+  it('stands on the top of the lowest intersection and ends 5 mm above the highest', () => {
     const source =
       '<svg viewBox="0 0 100 100"><g>' +
-      '<rect id="base" x="0" y="0" width="100" height="100"/>' +
+      '<rect id="plate" x="0" y="0" width="100" height="100"/>' +
       '<rect id="block" x="20" y="20" width="60" height="60"/>' +
       '<rect id="bar" x="0" y="40" width="100" height="20"/>' +
       '</g></svg>';
     const result = ranges(source);
-    expect(result.base).toEqual(base);
-    expect(result.block).toEqual(above(1));
-    // The bar crosses both the base and the block, so it ends above the block.
-    expect(result.bar).toEqual(above(2));
+    expect(result.plate).toEqual(base);
+    expect(result.block).toEqual(standing(1));
+    // The bar crosses both the plate (top 30) and the block (top 35): it starts at 30 and ends at 40.
+    expect(result.bar).toEqual([BASE_TO, BASE_TO + 2 * LAYER_MM]);
   });
 });

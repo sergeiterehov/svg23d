@@ -4,12 +4,13 @@ import { findNode, findPartRoots } from './resolveLeaves';
 /**
  * "Разложить по слоям": turns the cut order into a physical stack (see ADR-0018).
  *
- * The height of an element is **derived from the elements it intersects**, not fixed:
- * its bottom is the lowest bottom among them and its top is `LAYER_MM` above the highest top.
- * So a later element always ends above everything it overlaps (a trunk crossed by crowns stays
- * underneath them), and an element with a single intersection is built exactly from it.
+ * The height of an element is **derived from the elements it intersects** (a shared area in the top
+ * view), not fixed: its bottom is the **top** of the lowest of them and its top is `LAYER_MM` above
+ * the highest of them. So an element always stands on what is beneath it and ends above everything
+ * it overlaps (a trunk crossed by crowns stays underneath them).
  *
- * Elements that intersect nothing keep the project defaults — that is the base plate.
+ * Zero height is only for elements that stand on the project base — the ones that intersect nothing;
+ * everything else rests on the top of the part below, so nothing hangs in the air.
  */
 export const LAYER_MM = 5;
 
@@ -67,7 +68,8 @@ export function distributeLayers(
       zFrom = round(global.defaultZFrom);
       zTo = round(global.defaultZTo);
     } else {
-      zFrom = round(Math.min(...below.map((item) => item.zFrom)));
+      // Bottom = top of the lowest element under this one, top = 5 mm above the highest one.
+      zFrom = round(Math.min(...below.map((item) => item.zTo)));
       zTo = round(Math.max(...below.map((item) => item.zTo)) + LAYER_MM);
     }
 

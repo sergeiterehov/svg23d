@@ -66,7 +66,7 @@ export function LayerTools() {
               Разложить по слоям
             </span>
             <span className="mt-0.5 block text-[10px] leading-snug text-slate-500">
-              От нижнего пересечения до {LAYER_MM} мм выше верхнего
+              Ставит деталь на верх нижнего пересечения и на {LAYER_MM} мм выше верхнего
             </span>
           </button>
         </div>
