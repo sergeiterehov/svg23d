@@ -2,6 +2,8 @@ import type { NodeSettings, SvgDocNode } from '@core/model/types';
 import { useProjectStore } from '../../store/useProjectStore';
 import { contoursToPathData } from '@core/svg/preview';
 import { findNode } from '@core/solver/resolveLeaves';
+import { effectiveSettingsFor } from '@core/solver/inheritance';
+import { paintingOrder } from './paintingOrder';
 import { orderedChildren } from '@core/solver/order';
 import { HEIGHT_GRADIENT_CSS, heightColor } from './colorScale';
 
@@ -80,6 +82,20 @@ export function Preview2D() {
   const maskId = (index: number): string => `svg23d-mask-${index}`;
   const indexed = shapes.map((node, index) => ({ node, index }));
 
+  /** Top face of an element: taken from the solved leaves, otherwise from the inherited settings. */
+  const topOf = (node: SvgDocNode): number => {
+    const solved = heightById.get(node.id);
+    if (solved !== undefined) return solved;
+    return (
+      effectiveSettingsFor(project.document.root, project.settings, project.global, node.id)?.zTo ??
+      0
+    );
+  };
+
+  // Painting order follows the heights, not the tree (see `paintingOrder`). Only "как есть" keeps the
+  // document order of the SVG.
+  const painting = mode === 'asis' ? indexed : paintingOrder(indexed, ({ node }) => topOf(node));
+
   return (
     <div
       className="relative h-full w-full overflow-hidden bg-[#0b1120]"
@@ -119,7 +135,7 @@ export function Preview2D() {
           )}
         </defs>
 
-        {indexed.map(({ node, index }) => {
+        {painting.map(({ node, index }) => {
           const selected = selectedShapes.has(node.id);
           const hovered = hoveredShapes.has(node.id);
           // Stroke outlines are built from many overlapping polygons (discs, quads); outlining each
