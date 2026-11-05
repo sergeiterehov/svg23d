@@ -1,6 +1,7 @@
 import { CHAMFER_STEP_MM, MAX_CHAMFER_LAYERS } from '../model/defaults';
 import type { ManifoldApi, Section, Solid } from './section';
 import { offsetSection, unionSolids } from './section';
+import { buildLoftedPrism } from './chamfer';
 import { t } from '@i18n';
 
 export interface PrismOptions {
@@ -21,7 +22,7 @@ export interface PrismOptions {
  * offset inwards. The step is small enough (0.05 mm by default) to be invisible on FDM prints,
  * and it keeps the operation robust: only `offset`, `extrude` and `add` are involved.
  */
-export function buildPrism(_api: ManifoldApi, section: Section, options: PrismOptions): Solid {
+export function buildPrism(api: ManifoldApi, section: Section, options: PrismOptions): Solid {
   const height = options.zTo - options.zFrom;
   if (!(height > 1e-6)) {
     throw new Error(t('error.extrude.height'));
@@ -36,10 +37,22 @@ export function buildPrism(_api: ManifoldApi, section: Section, options: PrismOp
     top *= scale;
   }
 
+  if (bottom > 1e-6 || top > 1e-6) {
+    // A true 45° loft: one ring instead of a stack of layers (ADR-0040). Shapes that cannot be
+    // lofted safely fall back to the stepped build below.
+    const lofted = buildLoftedPrism(api, section, {
+      zFrom: options.zFrom,
+      zTo: options.zTo,
+      bottom,
+      top,
+    });
+    if (lofted) return lofted;
+  }
+
   const pieces: Solid[] = [];
 
   if (bottom > 1e-6) {
-    const layers = Math.min(MAX_CHAMFER_LAYERS, Math.max(1, Math.ceil(bottom / step)));
+    const layers = fallbackLayers(bottom, step);
     const layerHeight = bottom / layers;
     for (let i = 0; i < layers; i++) {
       const inset = bottom - (i + 0.5) * layerHeight;
@@ -54,7 +67,7 @@ export function buildPrism(_api: ManifoldApi, section: Section, options: PrismOp
   }
 
   if (top > 1e-6) {
-    const layers = Math.min(MAX_CHAMFER_LAYERS, Math.max(1, Math.ceil(top / step)));
+    const layers = fallbackLayers(top, step);
     const layerHeight = top / layers;
     for (let i = 0; i < layers; i++) {
       const inset = (i + 0.5) * layerHeight;
@@ -81,6 +94,15 @@ export function buildPrism(_api: ManifoldApi, section: Section, options: PrismOp
     throw new Error(t('error.extrude.empty'));
   }
   return union;
+}
+
+/**
+ * Layers of a stepped chamfer. Only shapes the loft cannot handle get here (a contour splits or
+ * vanishes at the inset), and those are small features: a cap of 6 layers keeps the staircase
+ * below a print layer while staying far away from the 40-layer blow-up (ADR-0040).
+ */
+function fallbackLayers(size: number, step: number): number {
+  return Math.max(1, Math.min(MAX_CHAMFER_LAYERS, 6, Math.ceil(size / step)));
 }
 
 /** Convenience: plain extrusion without chamfers. */

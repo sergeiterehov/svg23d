@@ -142,11 +142,11 @@ export function buildModel({ api, leaves, cache, onProgress }: BuildOptions): Bu
         ghostCache.set(leaf.id, null);
         return null;
       }
+      // The socket is cut as a straight prism: a chamfer on the ghost only makes it smaller, and a
+      // plain prism is both a superset (the part still fits) and far cheaper to build (ADR-0040).
       const solid = buildPrism(api, ghostSection, {
         zFrom: leaf.zFrom,
         zTo: leaf.zTo,
-        chamferBottom: leaf.chamferBottom,
-        chamferTop: leaf.chamferTop,
       });
       ghostCache.set(leaf.id, solid);
       return solid;
