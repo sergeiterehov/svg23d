@@ -18,7 +18,7 @@ Documentation (in Russian):
 Done: M0–M6 (import, tree, contours, extrusion in a worker, parts with sockets and clearance, 45°
 chamfers, 3MF/STL export) and most of M7 (manual layer order, undo/redo, `.svg23d.json` projects,
 browser project library, ru/en interface).
-Next: geometry cache and progress, presets, print checks (see `docs/PLAN.md`).
+Next: presets, print checks (see `docs/PLAN.md`).
 
 ## Quick start
 

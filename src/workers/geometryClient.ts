@@ -1,6 +1,10 @@
 import type { ResolvedLeaf } from '@core/model/types';
+import type { BuildStage } from '@core/solver/buildModel';
 import { getLocale, t } from '@i18n';
 import type { BuildResponse, WorkerRequest, WorkerResponse } from './contracts';
+
+/** Called with the current stage and the overall ratio in [0, 1]. */
+export type BuildProgressHandler = (stage: BuildStage, ratio: number) => void;
 
 /** Error thrown when a build is superseded by a newer one. */
 export class BuildCancelledError extends Error {
@@ -14,6 +18,7 @@ interface Pending {
   jobId: number;
   resolve: (value: BuildResponse) => void;
   reject: (error: Error) => void;
+  onProgress?: BuildProgressHandler;
 }
 
 /** Main-thread facade over the geometry worker. */
@@ -36,7 +41,7 @@ export class GeometryClient {
   }
 
   /** Rebuilds the model. Any in-flight build is cancelled. */
-  async build(leaves: ResolvedLeaf[]): Promise<BuildResponse> {
+  async build(leaves: ResolvedLeaf[], onProgress?: BuildProgressHandler): Promise<BuildResponse> {
     await this.ready;
     this.cancelPending();
 
@@ -44,7 +49,7 @@ export class GeometryClient {
     const message: WorkerRequest = { type: 'build', jobId, leaves, locale: getLocale() };
 
     return new Promise<BuildResponse>((resolve, reject) => {
-      this.pending = { jobId, resolve, reject };
+      this.pending = { jobId, resolve, reject, onProgress };
       this.worker?.postMessage(message);
     });
   }
@@ -69,7 +74,13 @@ export class GeometryClient {
       this.readyResolve = null;
       return;
     }
-    if (message.type === 'progress') return;
+    if (message.type === 'progress') {
+      const current = this.pending;
+      if (current && current.jobId === message.jobId) {
+        current.onProgress?.(message.stage, message.ratio);
+      }
+      return;
+    }
     const pending = this.pending;
     if (!pending || pending.jobId !== message.jobId) return;
     this.pending = null;

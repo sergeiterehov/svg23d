@@ -5,6 +5,7 @@ import type {
   PartMesh,
   ResolvedLeaf,
 } from '@core/model/types';
+import type { BuildStage } from '@core/solver/buildModel';
 import type { Locale } from '@i18n';
 
 /** Worker protocol (ADR-0010). */
@@ -45,4 +46,4 @@ export type WorkerResponse =
       warnings: DocumentWarning[];
     }
   | { type: 'error'; jobId: number; message: string }
-  | { type: 'progress'; jobId: number; stage: string; ratio: number };
+  | { type: 'progress'; jobId: number; stage: BuildStage; ratio: number };

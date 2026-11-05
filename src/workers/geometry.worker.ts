@@ -2,8 +2,13 @@
 import Module from 'manifold-3d';
 import type { ManifoldToplevel } from 'manifold-3d';
 import wasmUrl from 'manifold-3d/manifold.wasm?url';
-import { buildModel } from '@core/solver/buildModel';
-import { setLocale, t } from '@i18n';
+import {
+  buildModel,
+  type BuildCache,
+  type BuildStage,
+  type CachedPart,
+} from '@core/solver/buildModel';
+import { setLocale } from '@i18n';
 import type { WorkerRequest, WorkerResponse } from './contracts';
 
 /**
@@ -35,6 +40,32 @@ function post(message: WorkerResponse, transfer?: Transferable[]): void {
   scope.postMessage(message, transfer);
 }
 
+/**
+ * Finished parts survive between jobs (ADR-0039): editing one element re-cuts only the parts that
+ * depend on it. The limit keeps the memory of a long session bounded — the oldest entry goes first.
+ */
+const PART_CACHE_LIMIT = 64;
+const partCache = new Map<string, CachedPart>();
+const cache: BuildCache = {
+  get(key) {
+    const entry = partCache.get(key);
+    if (entry) {
+      // Refresh the recency: Map keeps insertion order.
+      partCache.delete(key);
+      partCache.set(key, entry);
+    }
+    return entry;
+  },
+  set(key, value) {
+    partCache.set(key, value);
+    while (partCache.size > PART_CACHE_LIMIT) {
+      const oldest = partCache.keys().next().value;
+      if (oldest === undefined) break;
+      partCache.delete(oldest);
+    }
+  },
+};
+
 async function handleBuild(
   jobId: number,
   leaves: Parameters<typeof buildModel>[0]['leaves'],
@@ -42,10 +73,24 @@ async function handleBuild(
   const api = await loadApi();
   if (jobId !== latestJobId) return;
 
-  post({ type: 'progress', jobId, stage: t('status.building'), ratio: 0.1 });
+  // The worker thread is busy during the build, but the messages reach the main thread right away.
+  let lastStage: BuildStage | null = null;
+  let lastRatio = -1;
+  let lastAt = 0;
+  const onProgress = (stage: BuildStage, ratio: number): void => {
+    const now = Date.now();
+    const ratioStep = ratio - lastRatio;
+    const worthSending =
+      stage !== lastStage || ratioStep >= 0.02 || now - lastAt >= 250 || ratio >= 1;
+    if (!worthSending || (now - lastAt < 40 && ratio < 1)) return;
+    lastStage = stage;
+    lastRatio = ratio;
+    lastAt = now;
+    post({ type: 'progress', jobId, stage, ratio });
+  };
 
   const started = Date.now();
-  const result = buildModel({ api, leaves });
+  const result = buildModel({ api, leaves, cache, onProgress });
   if (jobId !== latestJobId) return;
 
   const transfer: Transferable[] = [];

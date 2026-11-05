@@ -39,6 +39,7 @@ import {
 } from '../storage/appSettings';
 import { applyLocalePreference } from '../i18n';
 import { getLocale, t, type MessageKey, type LocalePreference } from '@i18n';
+import type { BuildStage } from '@core/solver/buildModel';
 import { parseSvg, SvgParseError } from '@core/svg/parseSvg';
 import {
   createEmptyDocument,
@@ -161,6 +162,8 @@ interface AppState {
   warnings: DocumentWarning[];
   result: BuildResultState | null;
   status: Status;
+  /** Stage and overall ratio of the running build; `null` when nothing is being built. */
+  buildProgress: { stage: BuildStage; ratio: number } | null;
   error: string | null;
   selectedIds: string[];
   hoveredId: string | null;
@@ -274,6 +277,7 @@ export const useProjectStore = create<AppState>()((set, get) => ({
   warnings: [],
   result: null,
   status: 'empty',
+  buildProgress: null,
   error: null,
   selectedIds: [],
   hoveredId: null,
@@ -1269,6 +1273,7 @@ async function performRebuild(set: SetState, get: GetState): Promise<void> {
       modelSize: null,
       result: null,
       status: 'empty',
+      buildProgress: null,
       error: null,
     });
     return;
@@ -1286,16 +1291,19 @@ async function performRebuild(set: SetState, get: GetState): Promise<void> {
     warnings: [...project.document.warnings, ...resolved.warnings],
     modelSize: { widthMm: resolved.widthMm, heightMm: resolved.heightMm },
     status: 'building',
+    buildProgress: { stage: 'sections', ratio: 0 },
     error: null,
   });
 
   if (resolved.leaves.length === 0) {
-    set({ status: 'ready', result: null });
+    set({ status: 'ready', buildProgress: null, result: null });
     return;
   }
 
   try {
-    const response = await getClient().build(resolved.leaves);
+    const response = await getClient().build(resolved.leaves, (stage, ratio) => {
+      set({ buildProgress: { stage, ratio } });
+    });
     set({
       result: {
         parts: response.parts,
@@ -1306,11 +1314,16 @@ async function performRebuild(set: SetState, get: GetState): Promise<void> {
       },
       warnings: [...project.document.warnings, ...resolved.warnings, ...response.warnings],
       status: 'ready',
+      buildProgress: null,
       error: null,
     });
   } catch (error) {
     if (error instanceof BuildCancelledError) return;
-    set({ status: 'error', error: error instanceof Error ? error.message : String(error) });
+    set({
+      status: 'error',
+      buildProgress: null,
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 }
 

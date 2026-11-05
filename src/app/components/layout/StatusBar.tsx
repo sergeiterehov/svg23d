@@ -1,11 +1,19 @@
 import { useState } from 'react';
 import clsx from 'clsx';
-import { formatNumber } from '@i18n';
+import { formatNumber, type MessageKey } from '@i18n';
+import type { BuildStage } from '@core/solver/buildModel';
 import { useProjectStore, type Status } from '../../store/useProjectStore';
 import { useT } from '../../i18n';
 import { ResetIcon } from '../common/Icon';
 import { IconButton } from '../common/IconButton';
 import { LanguageMenu } from './LanguageMenu';
+
+/** Stage names travel as identifiers; the interface translates them. */
+const STAGE_KEYS: Record<BuildStage, MessageKey> = {
+  sections: 'status.stage.sections',
+  prisms: 'status.stage.prisms',
+  merge: 'status.stage.merge',
+};
 
 /** Repository of the project: the link sits in the status bar so it is reachable from any view. */
 const GITHUB_URL = 'https://github.com/sergeiterehov/svg23d';
@@ -15,6 +23,7 @@ export function StatusBar() {
   const warnings = useProjectStore((s) => s.warnings);
   const error = useProjectStore((s) => s.error);
   const status = useProjectStore((s) => s.status);
+  const progress = useProjectStore((s) => s.buildProgress);
   const modelSize = useProjectStore((s) => s.modelSize);
   const result = useProjectStore((s) => s.result);
   const project = useProjectStore((s) => s.project);
@@ -46,7 +55,12 @@ export function StatusBar() {
         ) : (
           <span className="select-none">
             {status === 'building'
-              ? t('status.building')
+              ? progress
+                ? t('status.progress', {
+                    stage: t(STAGE_KEYS[progress.stage]),
+                    percent: Math.round(progress.ratio * 100),
+                  })
+                : t('status.building')
               : modelSize
                 ? t('status.modelSize', {
                     width: round(modelSize.widthMm),
