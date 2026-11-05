@@ -1,10 +1,11 @@
 import type { ResolvedLeaf } from '@core/model/types';
+import { getLocale, t } from '@i18n';
 import type { BuildResponse, WorkerRequest, WorkerResponse } from './contracts';
 
 /** Error thrown when a build is superseded by a newer one. */
 export class BuildCancelledError extends Error {
   constructor() {
-    super('Построение отменено');
+    super(t('error.cancelled'));
     this.name = 'BuildCancelledError';
   }
 }
@@ -30,7 +31,7 @@ export class GeometryClient {
     this.worker = new Worker(new URL('./geometry.worker.ts', import.meta.url), { type: 'module' });
     this.worker.onmessage = (event: MessageEvent<WorkerResponse>) => this.handleMessage(event.data);
     this.worker.onerror = (event) => {
-      this.failAll(new Error(event.message || 'Ошибка геометрического воркера'));
+      this.failAll(new Error(event.message || t('error.worker')));
     };
   }
 
@@ -40,7 +41,7 @@ export class GeometryClient {
     this.cancelPending();
 
     const jobId = ++this.jobCounter;
-    const message: WorkerRequest = { type: 'build', jobId, leaves };
+    const message: WorkerRequest = { type: 'build', jobId, leaves, locale: getLocale() };
 
     return new Promise<BuildResponse>((resolve, reject) => {
       this.pending = { jobId, resolve, reject };
@@ -57,7 +58,7 @@ export class GeometryClient {
   }
 
   dispose(): void {
-    this.failAll(new Error('Клиент геометрии закрыт'));
+    this.failAll(new Error(t('error.workerClosed')));
     this.worker?.terminate();
     this.worker = null;
   }

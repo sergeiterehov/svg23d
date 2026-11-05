@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { subscribeLocale, t, type MessageKey } from '@i18n';
 
 /**
  * Orientation gizmo ("nav cube") drawn in its own tiny WebGL canvas (see ADR-0017).
@@ -14,7 +15,8 @@ export interface NavCubeHandle {
 }
 
 interface FaceSpec {
-  label: string;
+  /** Translation key of the face label: the cube speaks the interface language (ADR-0037). */
+  label: MessageKey;
   /** Outward normal of the face (a world axis). */
   normal: THREE.Vector3;
   /**
@@ -33,37 +35,37 @@ const scratchDirection = new THREE.Vector3();
 
 const FACES: FaceSpec[] = [
   {
-    label: 'ПЕРЕД',
+    label: 'nav.front',
     normal: new THREE.Vector3(0, -1, 0),
     view: new THREE.Vector3(0, -1, 0),
     up: new THREE.Vector3(0, 0, 1),
   },
   {
-    label: 'ЗАД',
+    label: 'nav.back',
     normal: new THREE.Vector3(0, 1, 0),
     view: new THREE.Vector3(0, 1, 0),
     up: new THREE.Vector3(0, 0, 1),
   },
   {
-    label: 'ПРАВО',
+    label: 'nav.right',
     normal: new THREE.Vector3(1, 0, 0),
     view: new THREE.Vector3(1, 0, 0),
     up: new THREE.Vector3(0, 0, 1),
   },
   {
-    label: 'ЛЕВО',
+    label: 'nav.left',
     normal: new THREE.Vector3(-1, 0, 0),
     view: new THREE.Vector3(-1, 0, 0),
     up: new THREE.Vector3(0, 0, 1),
   },
   {
-    label: 'ВЕРХ',
+    label: 'nav.top',
     normal: new THREE.Vector3(0, 0, 1),
     view: new THREE.Vector3(0, -0.001, 1).normalize(),
     up: new THREE.Vector3(0, 1, 0),
   },
   {
-    label: 'НИЗ',
+    label: 'nav.bottom',
     normal: new THREE.Vector3(0, 0, -1),
     view: new THREE.Vector3(0, 0.001, -1).normalize(),
     up: new THREE.Vector3(0, 1, 0),
@@ -139,6 +141,8 @@ export function createNavCube(
   ];
 
   const highlights = new Map<FaceSpec, THREE.MeshBasicMaterial>();
+  const labelMaterials = new Map<FaceSpec, THREE.MeshBasicMaterial>();
+  const labelTextures = new Map<FaceSpec, THREE.CanvasTexture>();
   for (const face of FACES) {
     const position = face.normal.clone().multiplyScalar(HALF + 0.001);
 
@@ -155,7 +159,7 @@ export function createNavCube(
     highlight.lookAt(position.clone().add(face.normal));
     scene.add(highlight);
 
-    const texture = labelTexture(face.label);
+    const texture = labelTexture(t(face.label));
     const labelMaterial = new THREE.MeshBasicMaterial({
       map: texture,
       transparent: true,
@@ -169,8 +173,27 @@ export function createNavCube(
     scene.add(label);
 
     highlights.set(face, highlightMaterial);
+    labelMaterials.set(face, labelMaterial);
+    labelTextures.set(face, texture);
     disposables.push(highlightGeometry, highlightMaterial, labelGeometry, labelMaterial, texture);
   }
+
+  /**
+   * The cube is created once per viewer, so a language switch cannot go through a re-mount:
+   * the face labels repaint their textures in place.
+   */
+  const unsubscribeLocale = subscribeLocale(() => {
+    for (const face of FACES) {
+      const material = labelMaterials.get(face);
+      if (!material) continue;
+      const previous = labelTextures.get(face);
+      const texture = labelTexture(t(face.label));
+      material.map = texture;
+      material.needsUpdate = true;
+      labelTextures.set(face, texture);
+      previous?.dispose();
+    }
+  });
 
   const resize = (): void => {
     const width = Math.max(container.clientWidth || 1, 1);
@@ -282,6 +305,7 @@ export function createNavCube(
     },
     dispose() {
       observer.disconnect();
+      unsubscribeLocale();
       canvas.removeEventListener('pointermove', handlePointerMove);
       canvas.removeEventListener('pointerdown', handlePointerDown);
       canvas.removeEventListener('pointerup', handlePointerUp);

@@ -1,4 +1,5 @@
 import { useProjectStore } from '../../store/useProjectStore';
+import { useT } from '../../i18n';
 import { Dialog, DialogButton } from '../common/Dialog';
 
 /**
@@ -6,6 +7,7 @@ import { Dialog, DialogButton } from '../common/Dialog';
  * the existing project or start a new one from the file.
  */
 export function ImportConflictDialog() {
+  const t = useT();
   const pending = useProjectStore((s) => s.pendingImport);
   const resolveImport = useProjectStore((s) => s.resolveImport);
   const cancelImport = useProjectStore((s) => s.cancelImport);
@@ -14,20 +16,24 @@ export function ImportConflictDialog() {
 
   return (
     <Dialog
-      title="Проект уже есть"
+      title={t('import.exists.title')}
       onClose={cancelImport}
       footer={
         <>
-          <DialogButton onClick={cancelImport}>Отмена</DialogButton>
-          <DialogButton onClick={() => resolveImport('new')}>Создать новый</DialogButton>
+          <DialogButton onClick={cancelImport}>{t('common.cancel')}</DialogButton>
+          <DialogButton onClick={() => resolveImport('new')}>
+            {t('import.exists.create')}
+          </DialogButton>
           <DialogButton variant="primary" onClick={() => resolveImport('existing')}>
-            Открыть существующий
+            {t('import.exists.open')}
           </DialogButton>
         </>
       }
     >
-      В истории уже есть проект «{pending.existingName}». Открыть его или создать новый из файла «
-      {pending.fileName}»?
+      {t('import.exists.body', {
+        existing: pending.existingName,
+        file: pending.fileName,
+      })}
     </Dialog>
   );
 }

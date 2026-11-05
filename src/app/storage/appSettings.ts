@@ -1,17 +1,20 @@
+import type { LocalePreference } from '@i18n';
 import type { ViewSettings } from '@core/model/types';
 
 /**
  * Application settings, kept **outside** the projects (ADR-0031): how the user looks at the model
- * is a property of the person, not of the artwork. Everything that affects geometry lives in the
- * project itself.
+ * and which language the interface speaks is a property of the person, not of the artwork.
+ * Everything that affects geometry lives in the project itself.
  *
  * A small synchronous store is enough here — localStorage is available before the first paint, so
- * the view mode does not flash from 3D to 2D while IndexedDB opens.
+ * neither the view mode nor the language flashes while IndexedDB opens.
  */
 
 export interface AppSettings {
   viewMode: '2d' | '3d';
   view: ViewSettings;
+  /** «auto» follows the browser; an explicit language wins (ADR-0037). */
+  locale: LocalePreference;
 }
 
 const SETTINGS_KEY = 'svg23d:settings';
@@ -34,19 +37,31 @@ function write(key: string, value: string | null): void {
   }
 }
 
-export function loadAppSettings(): AppSettings | null {
+function readSettings(): Partial<AppSettings> | null {
   const raw = read(SETTINGS_KEY);
   if (!raw) return null;
   try {
-    const parsed = JSON.parse(raw) as Partial<AppSettings>;
-    if (!parsed.view || typeof parsed.view !== 'object') return null;
-    return {
-      viewMode: parsed.viewMode === '2d' ? '2d' : '3d',
-      view: parsed.view as ViewSettings,
-    };
+    return JSON.parse(raw) as Partial<AppSettings>;
   } catch {
     return null;
   }
+}
+
+export function loadAppSettings(): AppSettings | null {
+  const parsed = readSettings();
+  if (!parsed) return null;
+  if (!parsed.view || typeof parsed.view !== 'object') return null;
+  return {
+    viewMode: parsed.viewMode === '2d' ? '2d' : '3d',
+    view: parsed.view as ViewSettings,
+    locale: parsed.locale === 'ru' || parsed.locale === 'en' ? parsed.locale : 'auto',
+  };
+}
+
+/** The language is readable on its own: picking one does not depend on the stored view mode. */
+export function loadLocalePreference(): LocalePreference {
+  const parsed = readSettings();
+  return parsed?.locale === 'ru' || parsed?.locale === 'en' ? parsed.locale : 'auto';
 }
 
 export function saveAppSettings(settings: AppSettings): void {

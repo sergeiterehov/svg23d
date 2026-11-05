@@ -1,147 +1,161 @@
 # svg23d
 
-![svg23d: плоская SVG-иллюстрация превратилась в 3D-модель из отдельных печатных деталей](demo.png)
+![svg23d: a flat SVG illustration turned into a 3D model made of separate printable parts](demo.png)
 
-Веб-приложение: загрузить плоский SVG (пейзаж, логотип, иллюстрацию из векторного редактора) и получить
-готовую к печати 3D-модель — набор отдельных деталей с гнёздами, допусками и фасками.
+A web app: load a flat SVG (a landscape, a logo, an illustration from a vector editor) and get a
+print-ready 3D model — a set of separate parts with sockets, clearances and chamfers.
 
-**Демо:** <https://sergeiterehov.github.io/svg23d/> — собирается и публикуется из `main` автоматически
-(GitHub Actions → Pages, см. `docs/adr/0034-github-pages-deploy.md`).
+**Demo:** <https://sergeiterehov.github.io/svg23d/> — built and deployed from `main` automatically
+(GitHub Actions → Pages, see `docs/adr/0034-github-pages-deploy.md`).
 
-Документация:
+Documentation (in Russian):
 
-- `docs/PLAN.md` — план работ по этапам, критерии приёмки, текущий статус.
-- `docs/adr/` — Architecture Decision Records (почему сделано именно так).
+- `docs/PLAN.md` — milestones, acceptance criteria and the current status.
+- `docs/adr/` — Architecture Decision Records (why things are the way they are).
 
-## Статус
+## Status
 
-Готово: M0–M6 (импорт, дерево, контуры, экструзия в воркере, детали с гнёздами и допуском, фаски 45°,
-экспорт 3MF/STL) и большая часть M7 (ручной порядок слоёв, undo/redo, проект `.svg23d.json`).
-Дальше: кэш/прогресс пересчёта, пресеты, мультивыбор и проверка печати (см. `docs/PLAN.md`).
+Done: M0–M6 (import, tree, contours, extrusion in a worker, parts with sockets and clearance, 45°
+chamfers, 3MF/STL export) and most of M7 (manual layer order, undo/redo, `.svg23d.json` projects,
+browser project library, ru/en interface).
+Next: geometry cache and progress, presets, print checks (see `docs/PLAN.md`).
 
-## Быстрый старт
+## Quick start
 
 ```bash
 npm install
 npm run dev        # http://localhost:5173
 npm test           # vitest
 npm run lint
-npm run build      # tsc --noEmit && vite build (подпуть /svg23d/ для Pages)
-npm run preview    # посмотреть собранный бандл: http://localhost:4173/svg23d/
+npm run build      # tsc --noEmit && vite build (sub-path /svg23d/ for Pages)
+npm run preview    # inspect the built bundle: http://localhost:4173/svg23d/
 ```
 
-Проекты хранятся **в браузере**: последний открытый поднимается сразу при запуске, а имя в шапке — это
-кнопка со списком всех проектов (свежие сверху, с датой последней правки). Двойной клик по имени в списке
-переименовывает проект, корзина удаляет его после подтверждения. Кнопка «Сохранить» по-прежнему скачивает
-проект файлом `.svg23d.json`, а «Открыть» принимает и `.svg`, и такой файл; если SVG приходит с именем,
-которое уже есть в истории, приложение спросит — открыть существующий проект или создать новый.
+Projects live **in the browser**: the last one opens at startup, and the name in the header is a
+button that lists every stored project (newest edit first, with its date). Double-click a name in the
+list to rename the project; the bin deletes it after confirmation. The save button still downloads
+the project as a `.svg23d.json` file, and “Open” accepts both `.svg` and such a file. If an SVG
+arrives with a name that already exists in the history, the app asks whether to open the existing
+project or create a new one.
 
-Пустой проект **«Безымянный»** существует с первого запуска — его можно настроить и сохранить, просто в нём
-ещё нет ни одного элемента. В панели слоёв сверху виден блок загрузки («Перетащите SVG сюда» / «Выбрать
-файл»): как только SVG импортирован, проект получает имя файла, а блок уступает место дереву слоёв.
-Выпадающий список **«Примеры»** живёт в этом блоке: логотип HTML5, пейзаж со слоями и текст с обводкой
-(`samples/name.svg`).
+An empty **“Untitled”** project exists from the first launch: you can configure and save it, it just
+has no elements yet. The layers panel starts with an upload block (“Drop an SVG here” / “Choose a
+file”); as soon as an SVG is imported the project takes the file name and the block gives way to the
+layer tree. The **“Examples”** dropdown lives in that block: the HTML5 logo, a layered landscape and
+outlined text (`samples/name.svg`).
 
-## Как пользоваться
+## Language
 
-1. Перетащите SVG или выберите пример. Слева появится дерево: порядок сверху вниз = порядок вырезания (как в SVG);
-   проект получит имя файла.
-2. Выберите элемент или группу и задайте **высоту от/до** — настройки группы наследуются детьми.
-   «До» не может опуститься ниже «от»; нулевая толщина допустима — такой элемент просто не печатается.
-   ⌘/Ctrl-клик добавляет элементы к выбору, Shift-клик выбирает диапазон строк, ⌘/Ctrl+A — все
-   печатные детали: инспектор показывает общие настройки, а различающиеся
-   значения — как разброс в плейсхолдере (`12-15`), и правит все выбранные разом.
-   У группы и объединения инспектор внизу показывает блок **«Элементы»** — состав контейнера;
-   клик по строке выбирает этот элемент.
-   В любое числовое поле можно ввести дельту — `+2` или `-2` изменит значение на эту величину
-   (для мультивыбора — у каждого элемента своё); ввод применяется по Enter или при уходе из поля.
-3. Отметьте элементы как **отдельные печатные детали** (по умолчанию детали — дети корневого `<g>`).
-4. Задайте **допуск** (зазор на сторону) и **фаски** сверху/снизу (45°).
-5. В заголовке панели слоёв справа — кнопка **«Инструменты»** (ключ и молоток). Меню — это список
-   инструментов (иконка, название, одна строка о том, что он делает); у инструмента с настройками
-   по клику открывается диалог, и действие выполняется его кнопкой. Там два инструмента:
-   - **«Уменьшить число цветов»**: спросит, сколько цветов оставить, и сразу покажет получившуюся
-     палитру; пересборка идёт взвешенным k-means в OKLab — цвета, занимающие бо́льшую площадь, весят
-     больше, поэтому отклонение от исходной картинки минимально. «Вернуть цвета файла» сбрасывает
-     индивидуальные цвета элементов;
-   - **«Разложить по слоям»**: высота каждой детали считается по тому, что видно под ней в виде сверху
-     (растр контуров, а не габаритов): низ на верх самой низкой опоры минус погружение (деталь входит в
-     неё), верх на высоту слоя выше самой высокой. Что нарисовано выше, то и стоит выше (ствол остаётся
-     под кронами). Перекрытые более поздней деталью слои опорой не считаются: ствол внутри холма стоит
-     на холме, крона, торчащая в небо, опускается до неба, а элемент в просвете буквы опирается на фон,
-     а не на тонкую обводку. На базе проекта (с нуля) стоят только детали без опор. В диалоге
-     настраиваются все числа: высота слоя (5 мм), погружение (1 мм), порог опоры (2 % площади) и
-     низ/верх деталей без опоры.
-6. Дерево редактируется. Правый клик по строке открывает контекстное меню (иконка + действие, справа
-   только горячая клавиша): «Сгруппировать» (`⌘G`) —
-   заворачивает выделение в новую группу на месте наименее вложенного и более верхнего элемента,
-   «Объединить» (`⌘U`) — то же, но группа печатается одним телом: фигуры сливаются 2D-boolean'ом
-   до выдавливания, поэтому внутренних стенок и гнёзд между ними нет, а личные настройки частей не
-   действуют (содержимое при этом остаётся редактируемым: части можно вынуть, удалить, исключить
-   из тела через «Игнорировать»;
-   «Разъединить» поднимает части на место объединения и убирает саму группу — ровно как
-   «Разгруппировать» для обычной группы), «Разгруппировать» — поднимает содержимое группы на её место,
-   «Переименовать», «Дублировать» (`⌘D`) — копия встаёт над оригиналом и сразу выделяется,
-   «Удалить» (`Delete`). Новая группа приходит свёрнутой, а
-   свёрнутость строк запоминается в проекте.
-   Перетаскивание переносит элемент (или всё
-   выделение) в любую группу и меняет порядок: верхняя треть строки — «над ней», нижняя — «под ней»,
-   середина группы — «внутрь». Все правки обратимы через `⌘Z`.
-   Фигура, у которой заливка и обводка одного цвета, сразу приходит объединением: обводка — её часть,
-   а не отдельная деталь с гнездом в заливке.
-   Если элемент окажется полностью перекрыт верхними — появится предупреждение в статус-баре
-   (там же кнопка ↻ для пересчёта модели).
-7. В 2D-превью элементы рисуются в порядке высоты (кроме режима «как есть»), поэтому картинка
-   совпадает с 3D: то, что построено выше, перекрывает нижнее. Режим «карта высот» красит по глубине
-   воды — от тёмно-синего к светло-голубому.
-   Наведение на элемент обводит его белым — в дереве, в 2D и в 3D одинаково (выделение всегда голубое,
-   чтобы состояния не путались, и белая обводка не рисуется поверх выделенного); скрытые элементы в
-   дереве приглушены, игнорируемые — ещё и зачёркнуты.
-   В свойствах два разных переключателя: **«Скрыть»** — только вид (элемент не рисуется в 3D и
-   пропускается при экспорте, но в модели остаётся: гнёзда и объём не меняются), **«Игнорировать»**
-   — исключение из модели, эквивалентное удалению (элемент остаётся в дереве и настройках, но не
-   входит ни в 2D, ни в 3D).
-   У части объединения глаз в дереве и «Игнорировать часть» в свойствах делают одно и то же:
-   часть слита в тело, и убрать её из вида по отдельности нельзя — только вынуть из тела
-   (ADR-0035).
-   Клик по детали в 3D выделяет её (голубой контур) и открывает настройки элемента; клик по пустому месту
-   снимает выделение и показывает настройки проекта.
-   На выбранном элементе появляются две синие стрелки: потяните верхнюю, чтобы изменить «до», нижнюю —
-   чтобы изменить «от» (шаг 0.5 мм); значения в инспекторе и геометрия обновляются на ходу.
-8. Скачайте **3MF** (мультиобъект + цвета) или **STL**.
-9. Проект сохраняется в браузере сам (имя в шапке открывает список проектов), а кнопка с дискетой
-   скачивает его файлом `*.svg23d.json`; кнопка с папкой открывает такой файл обратно.
-10. Переключатель **2D/3D** и кнопка **«Настройки вида»** (со слайдерами) стоят внизу справа, под
-    навигационным кубом. Попап показывает только то, что относится к текущему режиму: в 3D — проекция
-    (перспективная / ортогональная, иконками-табами), освещение (студийное / сверху / плоское) и
-    материал (матовый / глянцевый); в 2D — режим 2D (полупрозрачный / карта высот / как есть).
-    Подписи табов-иконок — в тултипе при наведении. На геометрию не влияет.
-11. **Навигационный куб** в правом нижнем углу 3D: щёлкните по грани (ПЕРЕД / ЗАД / ЛЕВО / ПРАВО /
-    ВЕРХ / НИЗ), чтобы плавно перейти на этот вид; перетаскивание куба вращает модель.
+The interface speaks **Russian and English**. On the first visit the language is detected from the
+browser; the globe button in the status bar switches it — “System” (follow the browser), “Русский”
+or “English” — and the choice is remembered in this browser only. The selected option is marked with
+a check, and “System” shows the language that is currently in effect. Language belongs to the person,
+not to the project: opening another project never changes it (ADR-0037).
 
-Горячие клавиши: `⌘Z` / `Ctrl+Z` — отменить, `⇧⌘Z` / `Ctrl+Shift+Z` (и `Ctrl+Y`) — повторить,
-`⌘S` / `Ctrl+S` — сохранить проект, `⌘O` / `Ctrl+O` — открыть SVG или проект, `⌘A` / `Ctrl+A` —
-выбрать все детали, `⌘G` / `Ctrl+G` — сгруппировать выделенное, `Delete` / `⌫` — удалить выделенное. В полях ввода сочетания работают как обычно (кроме сохранения и открытия).
+## How to use
 
-Детали экспортируются в исходных координатах: в слайсере включите авто-раскладку, чтобы объекты встали на стол.
+1. Drop an SVG or pick an example. A tree appears on the left: top to bottom is the cut order (as in
+   the SVG), and the project takes the file name.
+2. Select an element or a group and set the **height from/to**; group settings are inherited by its
+   children. “To” cannot go below “From”, and zero thickness is allowed — such an element is simply
+   not printed. ⌘/Ctrl-click adds elements to the selection, Shift-click selects a range of rows,
+   ⌘/Ctrl+A selects every printable part. The inspector then shows the shared settings — differing
+   values appear as a spread in the placeholder (`12-15`) — and edits them all at once. For a group
+   or a union the inspector ends with an **“Elements”** block listing what the container is made of;
+   clicking a row selects that element. Any numeric field accepts a delta — `+2` or `-2` changes the
+   value by that amount (per element in a multi-selection); the value applies on Enter or blur.
+3. Mark elements as **separate printed parts** (by default parts are the children of the root `<g>`).
+4. Set the **clearance** (per side) and the **chamfers** on top/bottom (45°).
+5. In the header of the layers panel, on the right, is the **“Tools”** button (key and hammer). The
+   menu is a list of tools (icon, name, one line about what it does); a tool with settings opens a
+   dialog on click, and its button runs the action. There are two tools:
+   - **“Reduce the number of colours”** asks how many colours to keep and previews the resulting
+     palette; the rebuild is a weighted k-means in OKLab — colours that cover more area weigh more,
+     so the deviation from the original picture is minimal. “Restore the file colours” removes
+     per-element colour overrides;
+   - **“Distribute by layers”** computes each part's height from what is visible below it in the top
+     view (a raster of the contours, not of the bounds): the bottom sits on the top of the lowest
+     support minus the sink (the part bites into it), the top is the layer height above the highest
+     support. What is drawn higher also stands higher (a trunk stays under the crowns). Layers
+     covered by a later part do not count as supports: a trunk inside a hill stands on the hill, a
+     crown sticking into the sky drops down to the sky, and an element in a letter's counter rests on
+     the background rather than on a thin stroke. Parts without supports stand on the project base.
+     The dialog exposes every number: layer height (5 mm), sink (1 mm), support threshold (2% of the
+     area) and the bottom/top of the unsupported parts.
+6. The tree is editable. Right-click a row for the context menu (icon + action, only the shortcut on
+   the right): “Group” (`⌘G`) wraps the selection in a new group in place of the least nested, highest
+   selected element; “Merge” (`⌘U`) does the same but the group prints as one body — the shapes are
+   merged with a 2D boolean before extrusion, so there are no internal walls or sockets between them
+   and the pieces' own settings do not apply (the contents stay editable: pieces can be pulled out,
+   deleted or excluded from the body with “Ignore”); “Split” lifts the pieces to the union's place and
+   removes the group itself — exactly like “Ungroup” for a plain group, which lifts the contents to
+   the group's place; “Rename”, “Duplicate” (`⌘D`) — the copy is placed above the original and
+   selected; “Delete” (`Delete`). A new group arrives collapsed, and the collapsed state of rows is
+   stored in the project. Dragging moves an element (or the whole selection) into any group and
+   changes the order: the top third of a row means “above it”, the bottom third “below it”, the
+   middle of a group “inside it”. Every edit is undoable with `⌘Z`.
+   A shape whose fill and stroke share one colour arrives as a union straight away: the stroke is a
+   piece of it rather than a separate part with a socket in the fill.
+   If an element ends up fully covered by upper ones, a warning appears in the status bar (the ↻
+   button there rebuilds the model).
+7. The 2D preview paints elements in height order (except the “as is” mode), so the picture matches
+   the 3D: whatever was built higher covers what is below. The “height map” mode colours by depth —
+   from dark blue to light blue. Hovering an element outlines it in white — in the tree, in 2D and in
+   3D alike (selection is always sky-blue so the states never mix, and the white outline is not drawn
+   over a selected element); hidden elements are dimmed in the tree, ignored ones are also struck
+   through.
+   Settings have two different switches: **“Hide”** is view-only (the element is not drawn in 3D and
+   is skipped on export, but stays in the model: sockets and volume do not change) and
+   **“Ignore”** excludes it from the model, which is equivalent to deleting it (the element stays in
+   the tree and in the settings but is not part of 2D or 3D). For a piece of a union the eye in the
+   tree and “Ignore the piece” in the settings do the same thing: the piece is merged into the body,
+   so it cannot be hidden separately — only taken out of the body (ADR-0035).
+   Clicking a part in 3D selects it (sky-blue outline) and opens its settings; clicking empty space
+   clears the selection and shows the project settings. Two blue arrows appear on the selected
+   element: drag the top one to change “To”, the bottom one to change “From” (0.5 mm steps); the
+   inspector values and the geometry update live.
+8. Download **3MF** (multi-object + colours) or **STL**.
+9. The project saves itself in the browser (the name in the header opens the project list), and the
+   floppy button downloads it as `*.svg23d.json`; the folder button opens such a file again.
+10. The **2D/3D** switch and the **“View settings”** button (with sliders) sit at the bottom right,
+    under the navigation cube. The popover shows only what belongs to the current mode: in 3D —
+    projection (perspective/orthographic, icon tabs), lighting (studio/top/flat) and material
+    (matte/glossy); in 2D — the 2D mode (transparent/height map/as is). Icon tab names appear as
+    tooltips on hover. Display only: geometry is unaffected.
+11. The **navigation cube** in the bottom-right corner of the 3D view: click a face (FRONT / BACK /
+    LEFT / RIGHT / TOP / BOTTOM) to animate to that view; dragging the cube rotates the model.
 
-## Структура
+Keyboard shortcuts: `⌘Z` / `Ctrl+Z` — undo, `⇧⌘Z` / `Ctrl+Shift+Z` (and `Ctrl+Y`) — redo,
+`⌘S` / `Ctrl+S` — save the project, `⌘O` / `Ctrl+O` — open an SVG or a project, `⌘A` / `Ctrl+A` —
+select all parts, `⌘G` / `Ctrl+G` — group the selection, `⌘D` / `Ctrl+D` — duplicate,
+`Delete` / `⌫` — delete the selection. Inside input fields the combinations work as usual (except
+save and open).
 
-- `src/core/` — чистое ядро без React: `svg/` (parse, styles, transforms, flatten, shapes, stroke, units),
-  `geometry/` (section, extrude, mesh), `solver/` (resolveLeaves, inheritance, order, buildModel),
-  `export/` (stl, threemf), `model/` (types, defaults, project).
-- `src/workers/` — Manifold (WASM) в Web Worker, протокол job/result.
+Parts are exported in their original coordinates: enable auto-arrange in the slicer so the objects
+sit on the bed.
+
+## Structure
+
+- `src/core/` — a pure core without React: `svg/` (parse, styles, transforms, flatten, shapes,
+  stroke, units), `geometry/` (section, extrude, mesh), `solver/` (resolveLeaves, inheritance, order,
+  buildModel), `export/` (stl, threemf), `model/` (types, defaults, project).
+- `src/i18n/` — the ru/en dictionaries, `t()` with `{placeholders}`, locale detection and the
+  subscription used by React, the worker and the nav cube (ADR-0037).
+- `src/workers/` — Manifold (WASM) in a Web Worker, job/result protocol.
 - `src/app/` — React 19 + zustand: `store/`, `components/{layout,tree,inspector,preview,upload,common}`.
-- `src/viewer/` — императивная three.js-сцена (`createViewer`), навигационный куб (`navCube`).
-- `tests/` — vitest: контуры, стили, парсинг, инварианты геометрии, писатели STL/3MF.
-- `docs/PLAN.md`, `docs/adr/` — план и Architecture Decision Records.
+- `src/viewer/` — imperative three.js scene (`createViewer`), navigation cube (`navCube`).
+- `tests/` — vitest: contours, styles, parsing, geometry invariants, STL/3MF writers, i18n.
+- `docs/PLAN.md`, `docs/adr/` — the plan and the Architecture Decision Records.
 
-## Что умеет (целевое состояние MVP)
+## What it does (MVP target)
 
-1. Импорт SVG с сохранением дерева групп (`<g>`), цветов и порядка отрисовки.
-2. Заливка и **обводка**: `stroke-width` превращается в отдельный элемент геометрии, так что обводке можно
-   задать свою высоту, допуск и цвет. Маски (`mask`) учитываются: скрытые маской области в геометрию не попадают.
-3. Назначение каждому элементу/группе диапазона высот `от`/`до`.
-4. Разбиение на печатные детали; элементы верхних слоёв вырезают свои объёмы из нижних с допуском (мм на сторону).
-5. Фаски сверху/снизу (45°, размер в мм) на уровне элементов.
-6. Предпросмотр в 2D и 3D, экспорт 3MF (мультиобъект, цвета) и бинарный STL.
+1. Import an SVG keeping the group tree (`<g>`), colours and paint order.
+2. Fill and **stroke**: `stroke-width` becomes a separate piece of geometry, so a stroke can have its
+   own height, clearance and colour. Masks (`mask`) are honoured: areas hidden by a mask never reach
+   the geometry.
+3. Assign a `from`/`to` height range to every element or group.
+4. Split the artwork into printed parts; elements of upper layers cut their volumes out of the ones
+   below with a per-side clearance in millimetres.
+5. Top/bottom chamfers (45°, size in mm) at the element level.
+6. 2D and 3D preview, 3MF (multi-object, colours) and binary STL export.
+7. Russian and English interface with browser detection and a status-bar switcher.

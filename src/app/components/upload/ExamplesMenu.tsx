@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import clsx from 'clsx';
 import { EXAMPLES, useProjectStore, type ExampleId } from '../../store/useProjectStore';
+import { useT } from '../../i18n';
 import { ChevronDownIcon } from '../common/Icon';
 
 const EXAMPLE_IDS = Object.keys(EXAMPLES) as ExampleId[];
@@ -16,6 +17,7 @@ export function ExamplesMenu({
   direction?: 'up' | 'down';
   triggerClassName?: string;
 }) {
+  const t = useT();
   const loadExample = useProjectStore((s) => s.loadExample);
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -49,7 +51,7 @@ export function ExamplesMenu({
             'rounded-md border border-slate-700 px-2.5 py-1.5 text-xs text-slate-300 hover:border-slate-500 hover:text-white',
         )}
       >
-        Примеры
+        {t('examples.title')}
         <ChevronDownIcon className={clsx('h-3 w-3 transition', open && 'rotate-180')} />
       </button>
 
@@ -72,7 +74,7 @@ export function ExamplesMenu({
               }}
               className="block w-full px-3 py-1.5 text-left text-xs text-slate-300 hover:bg-slate-800 hover:text-white"
             >
-              {EXAMPLES[id].description}
+              {t(EXAMPLES[id].descriptionKey)}
             </button>
           ))}
         </div>

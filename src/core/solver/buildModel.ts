@@ -19,6 +19,7 @@ import {
 } from '../model/defaults';
 import { buildPrism } from '../geometry/extrude';
 import { meshFromSolid } from '../geometry/mesh';
+import { t } from '@i18n';
 import {
   offsetSection,
   sectionFromContours,
@@ -77,7 +78,7 @@ export function buildModel({ api, leaves }: BuildOptions): BuildOutput {
       warnings.push({
         nodeId: leaf.id,
         code: 'empty-shape',
-        message: `Элемент «${leaf.name}» пуст после разрешения контуров`,
+        message: t('warn.leafEmpty', { name: leaf.name }),
       });
       continue;
     }
@@ -110,7 +111,7 @@ export function buildModel({ api, leaves }: BuildOptions): BuildOutput {
       warnings.push({
         nodeId: leaf.id,
         code: 'empty-shape',
-        message: `Не удалось построить гнездо для «${leaf.name}»: ${(error as Error).message}`,
+        message: t('warn.socketFailed', { name: leaf.name, error: (error as Error).message }),
       });
       ghostCache.set(leaf.id, null);
       return null;
@@ -136,7 +137,7 @@ export function buildModel({ api, leaves }: BuildOptions): BuildOutput {
       warnings.push({
         nodeId: leaf.id,
         code: 'empty-shape',
-        message: `Не удалось построить «${leaf.name}»: ${(error as Error).message}`,
+        message: t('warn.partFailed', { name: leaf.name, error: (error as Error).message }),
       });
       continue;
     }
@@ -167,7 +168,7 @@ export function buildModel({ api, leaves }: BuildOptions): BuildOutput {
         warnings.push({
           nodeId: leaf.id,
           code: 'fully-cut',
-          message: `Элемент «${leaf.name}» полностью перекрыт более высокими элементами: поднимите его в списке слоёв или измените высоты`,
+          message: t('warn.fullyCut', { name: leaf.name }),
         });
       }
       continue;

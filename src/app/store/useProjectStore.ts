@@ -32,15 +32,19 @@ import {
 import {
   loadAppSettings,
   loadLastProjectId,
+  loadLocalePreference,
+  saveAppSettings,
   saveLastProjectId,
   type AppSettings,
 } from '../storage/appSettings';
+import { applyLocalePreference } from '../i18n';
+import { getLocale, t, type MessageKey, type LocalePreference } from '@i18n';
 import { parseSvg, SvgParseError } from '@core/svg/parseSvg';
 import {
-  UNTITLED_PROJECT_NAME,
   createEmptyDocument,
   createEmptyProject,
   isEmptyDocument,
+  untitledProjectName,
 } from '@core/model/empty';
 import { constrainGlobalPatch, constrainNodePatch, MIN_HEIGHT_MM } from '@core/model/limits';
 import { resolveLeaves, type PartInfo } from '@core/solver/resolveLeaves';
@@ -77,25 +81,22 @@ export type ExampleId = 'html5' | 'landscape' | 'name';
 
 export const EXAMPLES: Record<
   ExampleId,
-  { fileName: string; source: string; label: string; description: string }
+  { fileName: string; source: string; descriptionKey: MessageKey }
 > = {
   html5: {
     fileName: 'html5.svg',
     source: sampleSvg,
-    label: 'HTML5',
-    description: 'Логотип HTML5',
+    descriptionKey: 'example.html5',
   },
   landscape: {
     fileName: 'landscape.svg',
     source: landscapeSvg,
-    label: 'Пейзаж',
-    description: 'Пейзаж со слоями',
+    descriptionKey: 'example.landscape',
   },
   name: {
     fileName: 'name.svg',
     source: nameSvg,
-    label: 'Текст',
-    description: 'Текст с обводкой',
+    descriptionKey: 'example.name',
   },
 };
 
@@ -164,6 +165,8 @@ interface AppState {
   selectedIds: string[];
   hoveredId: string | null;
   viewMode: ViewMode;
+  /** Explicit language or «auto»; the effective language lives in the i18n module. */
+  localePreference: LocalePreference;
   exporting: boolean;
   past: Snapshot[];
   future: Snapshot[];
@@ -249,6 +252,11 @@ interface AppState {
   selectAll: () => void;
   hover: (nodeId: string | null) => void;
   setViewMode: (mode: ViewMode) => void;
+  /**
+   * Switches the interface language (ADR-0037). The preference is stored with the other display
+   * settings, and the model is rebuilt so its warnings come out in the new language.
+   */
+  setLocalePreference: (preference: LocalePreference) => void;
   rebuild: () => void;
   exportThreeMf: () => void;
   exportStl: () => void;
@@ -270,19 +278,34 @@ export const useProjectStore = create<AppState>()((set, get) => ({
   selectedIds: [],
   hoveredId: null,
   viewMode: '3d',
+  localePreference: 'auto',
   exporting: false,
   past: [],
   future: [],
   library: [],
   projectId: null,
-  projectName: UNTITLED_PROJECT_NAME,
+  projectName: untitledProjectName(),
   projectCreatedAt: 0,
   hydrated: false,
   pendingImport: null,
 
   hydrate: async () => {
     const settings = loadAppSettings();
+    const preference = settings?.locale ?? loadLocalePreference();
+    set({ localePreference: preference });
+    // The language is applied before anything is painted, so no Russian text flashes in an English UI.
+    applyLocalePreference(preference);
     if (settings) set({ viewMode: settings.viewMode });
+    // The untitled project was created when the store module loaded, possibly before the language
+    // was known: its name follows the interface until a file gives the project a real name.
+    const initial = get().project;
+    if (initial && initial.source.trim() === '') {
+      const name = untitledProjectName();
+      set({
+        project: { ...initial, fileName: name },
+        projectName: name,
+      });
+    }
     try {
       // Storage that does not answer must not leave the app on the splash screen.
       const library = await withTimeout(listProjects(), []);
@@ -439,7 +462,7 @@ export const useProjectStore = create<AppState>()((set, get) => ({
       const message =
         error instanceof SvgParseError
           ? error.message
-          : `Не удалось прочитать файл: ${String(error)}`;
+          : t('error.readFile', { error: String(error) });
       // Keep the current project: a broken file must not throw away the work in progress.
       set({ status: 'error', error: message });
     }
@@ -888,6 +911,29 @@ export const useProjectStore = create<AppState>()((set, get) => ({
   hover: (nodeId) => set({ hoveredId: nodeId }),
   setViewMode: (mode) => set({ viewMode: mode }),
 
+  setLocalePreference: (preference) => {
+    if (get().localePreference === preference) return;
+    const project = get().project;
+    set({ localePreference: preference, error: null });
+    // The language is one of the display settings: it belongs to the person, not to the artwork.
+    saveAppSettings({
+      viewMode: get().viewMode,
+      view: project?.global.view ?? DEFAULT_GLOBAL_SETTINGS.view,
+      locale: preference,
+    });
+    applyLocalePreference(preference);
+    const current = get().project;
+    if (current && current.source.trim() === '') {
+      const name = untitledProjectName();
+      set({ project: { ...current, fileName: name }, projectName: name });
+      return;
+    }
+    // Parser warnings and the model warnings were produced in the previous language: re-parse the
+    // source (the signature includes the language) and rebuild, so the status bar follows the UI.
+    syncParsedDocument(set, get);
+    if (current && !isEmptyDocument(current.document)) scheduleRebuild(set, get, 0);
+  },
+
   rebuild: () => scheduleRebuild(set, get, 0),
 
   exportThreeMf: () => {
@@ -906,12 +952,13 @@ export const useProjectStore = create<AppState>()((set, get) => ({
   },
 
   reset: () => {
+    const name = untitledProjectName();
     set({
       project: createEmptyProject(),
-      baseDocument: createEmptyDocument(),
+      baseDocument: createEmptyDocument(name),
       parsedSignature: null,
       projectId: null,
-      projectName: UNTITLED_PROJECT_NAME,
+      projectName: name,
       projectCreatedAt: 0,
       pendingImport: null,
       leaves: [],
@@ -963,7 +1010,7 @@ function mergePatches(
 /** Display name of an import: the file name without its extension. */
 export function projectNameFromFile(fileName: string): string {
   const name = fileName.replace(/\.[^.]+$/, '').trim();
-  return name === '' ? UNTITLED_PROJECT_NAME : name;
+  return name === '' ? untitledProjectName() : name;
 }
 
 /** Resolves with `fallback` if the promise takes too long: IndexedDB can block, the app cannot. */
@@ -1084,9 +1131,6 @@ function dissolve(set: SetState, get: GetState, nodeId: string, label: string): 
   scheduleRebuild(set, get, 0);
 }
 
-/** Name of a group created by «Объединить». */
-const UNION_NAME = 'Объединение';
-
 /**
  * Wraps the selection in a new group and puts it where the least nested, highest selected element
  * was (`createGroup` explains the rule). A union group is also marked in the overlay (ADR-0028).
@@ -1095,7 +1139,7 @@ function wrapSelection(set: SetState, get: GetState, ids: string[], union: boole
   const { project } = get();
   if (!project || ids.length === 0) return;
 
-  const result = createGroup(project.document, project.tree, ids, union ? UNION_NAME : '');
+  const result = createGroup(project.document, project.tree, ids, union ? t('name.union') : '');
   if (!result) return;
 
   const parent =
@@ -1136,7 +1180,9 @@ function withAllContours(leaves: ResolvedLeaf[]): Array<{ color: string; contour
 
 /** Everything that changes the flattening tolerance of a parse: quality, target size, fit axis. */
 function parseSignature(global: GlobalSettings): string {
-  return `${global.flatness}|${global.fitSizeMm}|${global.fit}`;
+  // The language is part of the signature: parser warnings are produced while flattening, so a
+  // language switch re-parses the source instead of leaving the old messages in place (ADR-0037).
+  return `${getLocale()}|${global.flatness}|${global.fitSizeMm}|${global.fit}`;
 }
 
 /**

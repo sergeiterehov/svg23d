@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import clsx from 'clsx';
+import type { MessageKey } from '@i18n';
 import { useProjectStore } from '../../store/useProjectStore';
+import { useT } from '../../i18n';
 import { DEFAULT_GLOBAL_SETTINGS } from '@core/model/defaults';
 import type { ViewSettings } from '@core/model/types';
 import { SelectField } from '../common/Select';
@@ -21,19 +23,19 @@ import { useTooltip } from '../common/Tooltip';
 
 interface TabOption<T extends string> {
   value: T;
-  label: string;
+  labelKey: MessageKey;
   icon: React.ComponentType<{ className?: string }>;
 }
 
 const MODES_2D: ReadonlyArray<TabOption<ViewSettings['mode2d']>> = [
-  { value: 'transparent', label: 'Полупрозрачный', icon: BlendIcon },
-  { value: 'heightmap', label: 'Карта высот', icon: HeightsIcon },
-  { value: 'asis', label: 'Как есть', icon: PictureIcon },
+  { value: 'transparent', labelKey: 'view.mode.transparent', icon: BlendIcon },
+  { value: 'heightmap', labelKey: 'view.mode.heightmap', icon: HeightsIcon },
+  { value: 'asis', labelKey: 'view.mode.asis', icon: PictureIcon },
 ];
 
 const PROJECTIONS: ReadonlyArray<TabOption<ViewSettings['projection']>> = [
-  { value: 'perspective', label: 'Перспективная', icon: ProjectionPerspectiveIcon },
-  { value: 'orthographic', label: 'Ортогональная', icon: ProjectionOrthoIcon },
+  { value: 'perspective', labelKey: 'view.perspective', icon: ProjectionPerspectiveIcon },
+  { value: 'orthographic', labelKey: 'view.orthographic', icon: ProjectionOrthoIcon },
 ];
 
 /**
@@ -43,6 +45,7 @@ const PROJECTIONS: ReadonlyArray<TabOption<ViewSettings['projection']>> = [
  * Escape / outside click).
  */
 export function ViewSettingsPopover() {
+  const t = useT();
   const view = useProjectStore((s) => s.project?.global.view) ?? DEFAULT_GLOBAL_SETTINGS.view;
   const viewMode = useProjectStore((s) => s.viewMode);
   const updateView = useProjectStore((s) => s.updateView);
@@ -68,7 +71,7 @@ export function ViewSettingsPopover() {
   return (
     <div ref={containerRef} className="relative">
       <IconButton
-        label="Настройки вида"
+        label={t('view.settings')}
         onClick={() => setOpen((value) => !value)}
         active={open}
         className={clsx(
@@ -84,9 +87,9 @@ export function ViewSettingsPopover() {
       {open && (
         <div className="absolute bottom-full right-0 z-30 mb-2 w-64 overflow-hidden rounded-lg border border-slate-700 bg-slate-900 shadow-2xl">
           <div className="flex items-center justify-between px-3 py-2.5">
-            <h3 className="text-[11px] font-semibold text-slate-200">Вид</h3>
+            <h3 className="text-[11px] font-semibold text-slate-200">{t('view.title')}</h3>
             <IconButton
-              label="Закрыть"
+              label={t('common.close')}
               onClick={() => setOpen(false)}
               className="h-5 w-5 hover:bg-slate-800 hover:text-white"
             >
@@ -96,10 +99,7 @@ export function ViewSettingsPopover() {
 
           {viewMode === '3d' ? (
             <>
-              <FieldSection
-                title="Проекция"
-                hint="Перспектива даёт естественную глубину, ортогональная — параллельные рёбра, как в CAD."
-              >
+              <FieldSection title={t('view.projection')} hint={t('view.projectionHint')}>
                 <IconTabs
                   value={view.projection}
                   options={PROJECTIONS}
@@ -107,38 +107,35 @@ export function ViewSettingsPopover() {
                 />
               </FieldSection>
 
-              <FieldSection title="Освещение">
+              <FieldSection title={t('view.lighting')}>
                 <SelectField
-                  label="Освещение"
+                  label={t('view.lighting')}
                   icon={SunIcon}
                   value={view.lighting}
                   options={[
-                    { value: 'studio', label: 'Студийное' },
-                    { value: 'top', label: 'Сверху' },
-                    { value: 'flat', label: 'Плоское' },
+                    { value: 'studio', label: t('view.lighting.studio') },
+                    { value: 'top', label: t('view.lighting.top') },
+                    { value: 'flat', label: t('view.lighting.flat') },
                   ]}
                   onChange={(value) => updateView({ lighting: value as ViewSettings['lighting'] })}
                 />
               </FieldSection>
 
-              <FieldSection title="Материал">
+              <FieldSection title={t('view.material')}>
                 <SelectField
-                  label="Материал"
+                  label={t('view.material')}
                   icon={SphereIcon}
                   value={view.material}
                   options={[
-                    { value: 'matte', label: 'Матовый' },
-                    { value: 'glossy', label: 'Глянцевый' },
+                    { value: 'matte', label: t('view.material.matte') },
+                    { value: 'glossy', label: t('view.material.glossy') },
                   ]}
                   onChange={(value) => updateView({ material: value as ViewSettings['material'] })}
                 />
               </FieldSection>
             </>
           ) : (
-            <FieldSection
-              title="Режим 2D"
-              hint="Полупрозрачный показывает наложение слоёв, карта высот красит по глубине, «как есть» — исходные цвета SVG."
-            >
+            <FieldSection title={t('view.mode2d')} hint={t('view.mode2dHint')}>
               <IconTabs
                 value={view.mode2d}
                 options={MODES_2D}
@@ -162,6 +159,7 @@ function IconTabs<T extends string>({
   options: ReadonlyArray<TabOption<T>>;
   onChange: (value: T) => void;
 }) {
+  const t = useT();
   return (
     // One track for the whole group, filled like any field and without a border: the active tab is
     // the only thing that gets a fill of its own.
@@ -169,7 +167,7 @@ function IconTabs<T extends string>({
       {options.map((option) => (
         <TabButton
           key={option.value}
-          label={option.label}
+          label={t(option.labelKey)}
           icon={option.icon}
           active={option.value === value}
           onClick={() => onChange(option.value)}

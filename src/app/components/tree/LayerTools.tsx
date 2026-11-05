@@ -5,6 +5,7 @@ import { LayersIcon, PaletteIcon, ToolsIcon } from '../common/Icon';
 import { IconButton } from '../common/IconButton';
 import { paletteUsage } from '@core/color/palette';
 import { DistributeDialog, PaletteDialog } from './LayerToolDialogs';
+import { useT } from '../../i18n';
 
 /** Which tool dialog is open (the menu itself only lists the tools). */
 type OpenDialog = 'distribute' | 'palette' | null;
@@ -18,6 +19,7 @@ type OpenDialog = 'distribute' | 'palette' | null;
  * indistinguishable from "open".
  */
 export function LayerTools() {
+  const t = useT();
   const leaves = useProjectStore((s) => s.leaves);
   const [open, setOpen] = useState(false);
   const [dialog, setDialog] = useState<OpenDialog>(null);
@@ -82,7 +84,7 @@ export function LayerTools() {
   return (
     <div ref={containerRef} className="relative ml-auto normal-case tracking-normal">
       <IconButton
-        label="Инструменты"
+        label={t('tools.title')}
         active={open}
         onClick={() => setOpen((value) => !value)}
         className={
@@ -107,24 +109,20 @@ export function LayerTools() {
         >
           <ToolItem
             icon={LayersIcon}
-            label="Разложить по слоям"
-            description={
-              isEmpty
-                ? 'Сначала загрузите SVG'
-                : 'Собрать детали в стопку: каждая опирается на то, что видно под ней'
-            }
+            label={t('tools.distribute')}
+            description={isEmpty ? t('tools.needSvg') : t('tools.distributeHint')}
             disabled={isEmpty}
             onClick={() => pick('distribute')}
           />
           <ToolItem
             icon={PaletteIcon}
-            label="Уменьшить число цветов"
+            label={t('tools.palette')}
             description={
               isEmpty
-                ? 'Сначала загрузите SVG'
+                ? t('tools.needSvg')
                 : colorCount <= 1
-                  ? 'В модели уже один цвет'
-                  : 'Объединить близкие оттенки: цветов в модели станет меньше'
+                  ? t('tools.paletteOneColor')
+                  : t('tools.paletteHint')
             }
             disabled={isEmpty || colorCount <= 1}
             onClick={() => pick('palette')}

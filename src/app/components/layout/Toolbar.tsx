@@ -4,6 +4,7 @@ import { OpenIcon, RedoIcon, SaveIcon, UndoIcon } from '../common/Icon';
 import { IconButton } from '../common/IconButton';
 import { useTooltip } from '../common/Tooltip';
 import { ProjectMenu } from './ProjectMenu';
+import { useT } from '../../i18n';
 
 const iconClass =
   'h-7 w-7 rounded-md border border-transparent hover:border-slate-700 hover:bg-slate-800 hover:text-slate-100';
@@ -14,6 +15,7 @@ interface ToolbarProps {
 }
 
 export function Toolbar({ onOpenFile }: ToolbarProps) {
+  const t = useT();
   const project = useProjectStore((s) => s.project);
   const result = useProjectStore((s) => s.result);
   const past = useProjectStore((s) => s.past);
@@ -23,10 +25,8 @@ export function Toolbar({ onOpenFile }: ToolbarProps) {
   const undo = useProjectStore((s) => s.undo);
   const redo = useProjectStore((s) => s.redo);
   const saveProject = useProjectStore((s) => s.saveProject);
-  const exportTip = useTooltip(
-    '3MF: отдельные объекты и цвета — для Bambu Studio и других слайсеров',
-  );
-  const stlTip = useTooltip('STL: все детали слиты в один меш');
+  const exportTip = useTooltip(t('toolbar.export3mfTip'));
+  const stlTip = useTooltip(t('toolbar.exportStlTip'));
 
   return (
     <header className="flex h-14 shrink-0 items-center gap-3 border-b border-slate-800 bg-slate-950/70 px-4">
@@ -40,7 +40,7 @@ export function Toolbar({ onOpenFile }: ToolbarProps) {
       <div className="ml-auto flex items-center gap-2">
         <div className="flex items-center gap-0.5">
           <IconButton
-            label="Отменить (⌘Z)"
+            label={t('toolbar.undo')}
             disabled={past.length === 0}
             onClick={undo}
             className={iconClass}
@@ -48,7 +48,7 @@ export function Toolbar({ onOpenFile }: ToolbarProps) {
             <UndoIcon className="h-4 w-4" />
           </IconButton>
           <IconButton
-            label="Повторить (⇧⌘Z)"
+            label={t('toolbar.redo')}
             disabled={future.length === 0}
             onClick={redo}
             className={iconClass}
@@ -58,15 +58,11 @@ export function Toolbar({ onOpenFile }: ToolbarProps) {
         </div>
 
         <div className="flex items-center gap-0.5">
-          <IconButton
-            label="Открыть SVG или проект (⌘O)"
-            onClick={onOpenFile}
-            className={iconClass}
-          >
+          <IconButton label={t('toolbar.open')} onClick={onOpenFile} className={iconClass}>
             <OpenIcon className="h-4 w-4" />
           </IconButton>
           <IconButton
-            label="Сохранить проект (⌘S)"
+            label={t('toolbar.save')}
             disabled={!project}
             onClick={saveProject}
             className={iconClass}

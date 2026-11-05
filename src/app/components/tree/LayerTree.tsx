@@ -18,6 +18,7 @@ import {
 } from '../common/Icon';
 import { IconButton } from '../common/IconButton';
 import { NodeIcon, nodeColour } from '../common/NodeIcon';
+import { useT } from '../../i18n';
 
 /** Where a dragged row lands relative to the row under the pointer. */
 type DropZone = 'before' | 'after' | 'inside';
@@ -153,6 +154,7 @@ function TreeContextMenu({
   onClose: () => void;
   onRename: () => void;
 }) {
+  const t = useT();
   const groupSelected = useProjectStore((s) => s.groupSelected);
   const unionSelected = useProjectStore((s) => s.unionSelected);
   const ununionSelected = useProjectStore((s) => s.ununionSelected);
@@ -210,7 +212,7 @@ function TreeContextMenu({
     >
       <MenuItem
         icon={<FolderIcon className="h-3.5 w-3.5" />}
-        label={`Сгруппировать${count > 1 ? ` (${count})` : ''}`}
+        label={t('tree.group', { count: count > 1 ? ` (${count})` : '' })}
         shortcut="⌘G"
         disabled={count === 0}
         onClick={() => {
@@ -220,14 +222,10 @@ function TreeContextMenu({
       />
       <MenuItem
         icon={<UnionIcon className="h-3.5 w-3.5" />}
-        label="Объединить"
+        label={t('tree.union')}
         shortcut="⌘U"
         disabled={shapes < 2}
-        title={
-          shapes < 2
-            ? 'Нужно минимум две фигуры'
-            : 'Одна печатная деталь: настройки частей не учитываются'
-        }
+        title={shapes < 2 ? t('tree.unionNeedTwo') : t('tree.unionTip')}
         onClick={() => {
           unionSelected();
           onClose();
@@ -236,7 +234,7 @@ function TreeContextMenu({
       {canSplit && (
         <MenuItem
           icon={<SplitIcon className="h-3.5 w-3.5" />}
-          label="Разъединить"
+          label={t('tree.split')}
           onClick={() => {
             ununionSelected();
             onClose();
@@ -246,7 +244,7 @@ function TreeContextMenu({
       {canUngroup && (
         <MenuItem
           icon={<UngroupIcon className="h-3.5 w-3.5" />}
-          label="Разгруппировать"
+          label={t('tree.ungroup')}
           onClick={() => {
             ungroupSelected();
             onClose();
@@ -255,15 +253,15 @@ function TreeContextMenu({
       )}
       <MenuItem
         icon={<RenameIcon className="h-3.5 w-3.5" />}
-        label="Переименовать"
+        label={t('tree.rename')}
         onClick={onRename}
       />
       <MenuItem
         icon={<DuplicateIcon className="h-3.5 w-3.5" />}
-        label={`Дублировать${count > 1 ? ` (${count})` : ''}`}
+        label={t('tree.duplicate', { count: count > 1 ? ` (${count})` : '' })}
         shortcut="⌘D"
         disabled={count === 0}
-        title="Копия встаёт над оригиналом и сразу выделяется"
+        title={t('tree.duplicateTip')}
         onClick={() => {
           duplicateSelected();
           onClose();
@@ -272,7 +270,7 @@ function TreeContextMenu({
       <div className="my-1 border-t border-slate-800" />
       <MenuItem
         icon={<TrashIcon className="h-3.5 w-3.5" />}
-        label={`Удалить${count > 1 ? ` (${count})` : ''}`}
+        label={t('tree.delete', { count: count > 1 ? ` (${count})` : '' })}
         shortcut="⌫"
         danger
         disabled={count === 0}
@@ -346,6 +344,7 @@ interface TreeRowProps {
 }
 
 function TreeRow({ node, depth, ui, anchorRef, onDrop }: TreeRowProps) {
+  const t = useT();
   const project = useProjectStore((s) => s.project);
   const selectedIds = useProjectStore((s) => s.selectedIds);
   const hoveredId = useProjectStore((s) => s.hoveredId);
@@ -473,10 +472,10 @@ function TreeRow({ node, depth, ui, anchorRef, onDrop }: TreeRowProps) {
         onMouseLeave={() => hover(null)}
         title={
           node.union
-            ? `объединение · ${node.id}`
+            ? t('tree.titleUnion', { id: node.id })
             : isIgnored
-              ? `игнорируется (вне модели) · ${node.id}`
-              : `${node.tag} · ${node.id}`
+              ? t('tree.titleIgnored', { id: node.id })
+              : t('tree.titleNode', { tag: node.tag, id: node.id })
         }
       >
         <button
@@ -502,7 +501,7 @@ function TreeRow({ node, depth, ui, anchorRef, onDrop }: TreeRowProps) {
           <input
             autoFocus
             defaultValue={node.name}
-            aria-label="Имя элемента"
+            aria-label={t('tree.nameAria')}
             // The whole name is selected, so typing replaces it instead of appending.
             onFocus={(event) => event.currentTarget.select()}
             className="min-w-0 flex-1 rounded border border-sky-500 bg-slate-950 px-1 py-0 text-xs text-white outline-none"
@@ -532,7 +531,7 @@ function TreeRow({ node, depth, ui, anchorRef, onDrop }: TreeRowProps) {
 
         {isPart && (
           <span className="rounded bg-emerald-500/15 px-1 text-[9px] uppercase tracking-wide text-emerald-300">
-            деталь
+            {t('tree.partBadge')}
           </span>
         )}
 
@@ -545,7 +544,7 @@ function TreeRow({ node, depth, ui, anchorRef, onDrop }: TreeRowProps) {
             of the body (the same as «Игнорировать часть» in the inspector). */}
         {unionOwner ? (
           <IconButton
-            label={isIgnored ? 'Вернуть часть в тело' : 'Игнорировать часть (как удаление)'}
+            label={isIgnored ? t('tree.showPart') : t('tree.ignorePart')}
             stopPropagation
             onClick={() => updateSettings(node.id, { ignored: isIgnored ? undefined : true })}
             className={clsx(
@@ -561,7 +560,9 @@ function TreeRow({ node, depth, ui, anchorRef, onDrop }: TreeRowProps) {
           </IconButton>
         ) : (
           <IconButton
-            label={hiddenByGroup ? 'Скрыто группой' : isHidden ? 'Показать' : 'Скрыть'}
+            label={
+              hiddenByGroup ? t('tree.hiddenByGroup') : isHidden ? t('tree.show') : t('tree.hide')
+            }
             stopPropagation
             disabled={hiddenByGroup}
             onClick={() => updateSettings(node.id, { hidden: isHidden ? undefined : true })}

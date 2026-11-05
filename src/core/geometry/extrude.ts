@@ -1,6 +1,7 @@
 import { CHAMFER_STEP_MM, MAX_CHAMFER_LAYERS } from '../model/defaults';
 import type { ManifoldApi, Section, Solid } from './section';
 import { offsetSection, unionSolids } from './section';
+import { t } from '@i18n';
 
 export interface PrismOptions {
   zFrom: number;
@@ -23,7 +24,7 @@ export interface PrismOptions {
 export function buildPrism(_api: ManifoldApi, section: Section, options: PrismOptions): Solid {
   const height = options.zTo - options.zFrom;
   if (!(height > 1e-6)) {
-    throw new Error('Высота элемента должна быть больше нуля');
+    throw new Error(t('error.extrude.height'));
   }
 
   const step = options.chamferStep ?? CHAMFER_STEP_MM;
@@ -77,7 +78,7 @@ export function buildPrism(_api: ManifoldApi, section: Section, options: PrismOp
 
   const union = unionSolids(pieces);
   if (!union) {
-    throw new Error('Не удалось построить тело: сечение пустое после смещения');
+    throw new Error(t('error.extrude.empty'));
   }
   return union;
 }
@@ -90,7 +91,7 @@ export function buildExtrusion(
   zTo: number,
 ): Solid {
   const height = zTo - zFrom;
-  if (!(height > 1e-6)) throw new Error('Высота элемента должна быть больше нуля');
+  if (!(height > 1e-6)) throw new Error(t('error.extrude.height'));
   const solid = section.extrude(height);
   const placed = solid.translate([0, 0, zFrom]);
   solid.delete();

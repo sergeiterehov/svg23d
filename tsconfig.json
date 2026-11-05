@@ -21,7 +21,9 @@
       "@core/*": ["./src/core/*"],
       "@app/*": ["./src/app/*"],
       "@viewer/*": ["./src/viewer/*"],
-      "@workers/*": ["./src/workers/*"]
+      "@workers/*": ["./src/workers/*"],
+      "@i18n": ["./src/i18n"],
+      "@i18n/*": ["./src/i18n/*"]
     }
   },
   "include": ["src", "tests", "vite.config.ts"]

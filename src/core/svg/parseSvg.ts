@@ -1,6 +1,7 @@
 import type { GlobalSettings, SvgDocument } from '../model/types';
 import { extractDocument, readViewBox } from './extractTree';
 import { computeUnitMapping } from './units';
+import { t } from '@i18n';
 
 /** Raised when the file is not a parseable SVG document. */
 export class SvgParseError extends Error {
@@ -34,18 +35,18 @@ const FORBIDDEN_TAGS = new Set([
  */
 export function parseSvg(text: string, options: ParseSvgOptions): SvgDocument {
   if (typeof DOMParser === 'undefined') {
-    throw new SvgParseError('DOMParser недоступен в этом окружении');
+    throw new SvgParseError(t('error.parse.dom'));
   }
   const parsed = new DOMParser().parseFromString(text, 'image/svg+xml');
   const parserError = parsed.getElementsByTagName('parsererror')[0];
   if (parserError) {
     const detail = (parserError.textContent ?? '').trim().split('\n')[0];
-    throw new SvgParseError(`Файл не является корректным SVG: ${detail || 'ошибка разбора XML'}`);
+    throw new SvgParseError(t('error.parse.invalid', { detail: detail || t('error.parse.xml') }));
   }
 
   const svgRoot = parsed.documentElement;
   if (!svgRoot || svgRoot.tagName.toLowerCase() !== 'svg') {
-    throw new SvgParseError('Корневой элемент документа должен быть <svg>');
+    throw new SvgParseError(t('error.parse.root'));
   }
 
   sanitize(svgRoot);

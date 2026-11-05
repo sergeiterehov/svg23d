@@ -1,13 +1,17 @@
 import { useState } from 'react';
 import clsx from 'clsx';
+import { formatNumber } from '@i18n';
 import { useProjectStore, type Status } from '../../store/useProjectStore';
+import { useT } from '../../i18n';
 import { ResetIcon } from '../common/Icon';
 import { IconButton } from '../common/IconButton';
+import { LanguageMenu } from './LanguageMenu';
 
 /** Repository of the project: the link sits in the status bar so it is reachable from any view. */
 const GITHUB_URL = 'https://github.com/sergeiterehov/svg23d';
 
 export function StatusBar() {
+  const t = useT();
   const warnings = useProjectStore((s) => s.warnings);
   const error = useProjectStore((s) => s.error);
   const status = useProjectStore((s) => s.status);
@@ -42,17 +46,23 @@ export function StatusBar() {
         ) : (
           <span className="select-none">
             {status === 'building'
-              ? 'Построение модели…'
+              ? t('status.building')
               : modelSize
-                ? `Модель ${round(modelSize.widthMm)} × ${round(modelSize.heightMm)} мм`
-                : 'Проект пуст'}
+                ? t('status.modelSize', {
+                    width: round(modelSize.widthMm),
+                    height: round(modelSize.heightMm),
+                  })
+                : t('status.empty')}
           </span>
         )}
 
         {result && (
           <span className="select-none text-slate-500">
-            {result.stats.partCount} дет. · {result.stats.triangleCount.toLocaleString('ru-RU')} тр.
-            · {(result.stats.volume / 1000).toFixed(2)} см³
+            {t('status.stats', {
+              parts: result.stats.partCount,
+              triangles: formatNumber(result.stats.triangleCount),
+              volume: (result.stats.volume / 1000).toFixed(2),
+            })}
           </span>
         )}
 
@@ -67,22 +77,24 @@ export function StatusBar() {
                 open ? 'bg-slate-800 text-slate-200' : 'text-amber-400 hover:bg-slate-800',
               )}
             >
-              предупреждений: {uniqueWarnings.length}
+              {t('status.warnings', { count: uniqueWarnings.length })}
             </button>
           )}
+
+          <LanguageMenu />
 
           <a
             href={GITHUB_URL}
             target="_blank"
             rel="noreferrer"
-            title="Открыть проект на GitHub"
+            title={t('status.github')}
             className="rounded px-2 py-0.5 text-slate-500 transition hover:bg-slate-800 hover:text-slate-100"
           >
             GitHub
           </a>
 
           <IconButton
-            label="Пересчитать модель"
+            label={t('status.rebuild')}
             onClick={rebuild}
             disabled={!project || status === 'empty'}
             className="h-6 w-6 hover:bg-slate-800 hover:text-slate-100"
@@ -96,11 +108,12 @@ export function StatusBar() {
 }
 
 function StatusPill({ status }: { status: Status }) {
+  const t = useT();
   const map = {
-    empty: { text: 'пусто', className: 'bg-slate-800 text-slate-400' },
-    building: { text: 'считаем…', className: 'bg-amber-500/15 text-amber-300' },
-    ready: { text: 'готово', className: 'bg-emerald-500/15 text-emerald-300' },
-    error: { text: 'ошибка', className: 'bg-rose-500/15 text-rose-300' },
+    empty: { text: t('status.pill.empty'), className: 'bg-slate-800 text-slate-400' },
+    building: { text: t('status.pill.building'), className: 'bg-amber-500/15 text-amber-300' },
+    ready: { text: t('status.pill.ready'), className: 'bg-emerald-500/15 text-emerald-300' },
+    error: { text: t('status.pill.error'), className: 'bg-rose-500/15 text-rose-300' },
   } as const;
   const item = map[status];
   return (

@@ -22,6 +22,7 @@ export default defineConfig(({ mode }) => ({
       '@app': resolvePath('./src/app'),
       '@viewer': resolvePath('./src/viewer'),
       '@workers': resolvePath('./src/workers'),
+      '@i18n': resolvePath('./src/i18n'),
     },
   },
   worker: {

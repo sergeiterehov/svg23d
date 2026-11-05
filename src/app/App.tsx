@@ -14,8 +14,10 @@ import { ViewSettingsPopover } from './components/preview/ViewSettingsPopover';
 import { ImportConflictDialog } from './components/layout/ImportConflictDialog';
 import { HelpHint } from './components/common/Icon';
 import { bootstrap } from './storage/persistence';
+import { useT } from './i18n';
 
 export default function App() {
+  const t = useT();
   const isEmpty = useProjectStore((s) => (s.project ? isEmptyDocument(s.project.document) : true));
   const viewMode = useProjectStore((s) => s.viewMode);
   const setViewMode = useProjectStore((s) => s.setViewMode);
@@ -92,7 +94,7 @@ export default function App() {
   if (!hydrated) {
     return (
       <div className="grid h-full place-items-center bg-slate-950 text-xs text-slate-500">
-        Открываем последний проект…
+        {t('app.loading')}
       </div>
     );
   }
@@ -106,7 +108,7 @@ export default function App() {
         type="file"
         accept=".json,.svg,application/json,image/svg+xml"
         className="hidden"
-        aria-label="Открыть SVG или проект"
+        aria-label={t('app.openFileAria')}
         onChange={(event) => {
           const file = event.target.files?.[0];
           if (file) {
@@ -143,8 +145,8 @@ export default function App() {
               className="flex items-center gap-1 border-b border-slate-800/70 px-3 py-2.5 text-[11px] font-semibold text-slate-200"
               data-keep-selection
             >
-              <span>Слои</span>
-              <HelpHint text="Сверху вниз = порядок вырезания: верхний элемент делает гнёзда в нижних. Перетащите строку, чтобы переместить элемент в любую группу. Двойной клик — переименовать. ⌘/Ctrl-клик добавляет к выбору, Shift-клик выбирает диапазон, ⌘/Ctrl+A — все элементы, ⌘G — сгруппировать, ⌘U — объединить в одну деталь, ⌘D — дублировать, Delete — удалить." />
+              <span>{t('layers.title')}</span>
+              <HelpHint text={t('layers.help')} />
               <LayerTools />
             </div>
             <LayerTree />

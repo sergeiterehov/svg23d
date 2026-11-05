@@ -1,10 +1,12 @@
 import { useRef, useState } from 'react';
 import clsx from 'clsx';
 import { useProjectStore } from '../../store/useProjectStore';
+import { useT } from '../../i18n';
 import { ExamplesMenu } from './ExamplesMenu';
 
 /** Drag & drop / file picker; compact mode is the block at the top of the layers panel. */
 export function SvgDropzone({ compact = false }: { compact?: boolean }) {
+  const t = useT();
   const importSvg = useProjectStore((s) => s.importSvg);
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
@@ -12,7 +14,7 @@ export function SvgDropzone({ compact = false }: { compact?: boolean }) {
 
   const readFile = async (file: File): Promise<void> => {
     if (!/\.svg$/i.test(file.name)) {
-      setError('Нужен файл с расширением .svg');
+      setError(t('dropzone.needSvg'));
       return;
     }
     setError(null);
@@ -41,7 +43,7 @@ export function SvgDropzone({ compact = false }: { compact?: boolean }) {
     >
       <div className={clsx('flex flex-col items-center text-center', compact ? 'gap-2' : 'gap-3')}>
         <p className={clsx('text-slate-300', compact ? 'text-xs' : 'text-sm')}>
-          Перетащите SVG сюда
+          {t('dropzone.dragHere')}
         </p>
         <div className="flex items-center gap-2">
           <button
@@ -52,7 +54,7 @@ export function SvgDropzone({ compact = false }: { compact?: boolean }) {
               compact ? 'px-2.5 py-1 text-[11px]' : 'px-3 py-1.5 text-xs',
             )}
           >
-            Выбрать файл
+            {t('dropzone.choose')}
           </button>
           <ExamplesMenu
             triggerClassName={clsx(
@@ -62,10 +64,7 @@ export function SvgDropzone({ compact = false }: { compact?: boolean }) {
           />
         </div>
         {!compact && (
-          <p className="text-[11px] leading-relaxed text-slate-500">
-            Поддерживаются фигуры с заливкой и обводкой: path, rect, circle, ellipse, polygon, use
-            и группы &lt;g&gt;.
-          </p>
+          <p className="text-[11px] leading-relaxed text-slate-500">{t('dropzone.supported')}</p>
         )}
         {error && <p className="text-[11px] text-rose-400">{error}</p>}
       </div>

@@ -33,7 +33,11 @@ export function startAutosave(): () => void {
     ) {
       return;
     }
-    saveAppSettings({ viewMode: state.viewMode, view: state.project.global.view });
+    saveAppSettings({
+      viewMode: state.viewMode,
+      view: state.project.global.view,
+      locale: state.localePreference,
+    });
   });
 
   let timer: number | null = null;

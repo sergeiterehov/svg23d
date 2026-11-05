@@ -1,5 +1,6 @@
 import type { Contour, Vec2 } from '../model/types';
 import { dedupeRings, flattenCubic } from './flatten';
+import { t } from '@i18n';
 
 /**
  * Basic SVG shapes → contours. Curves are flattened with the same tolerance as paths.
@@ -185,7 +186,7 @@ export function shapeToContours(
     case 'line': {
       return {
         contours: [],
-        warnings: ['Линия не имеет площади и пропущена (обводки не поддерживаются)'],
+        warnings: [t('warn.lineArea')],
       };
     }
     default:
@@ -195,5 +196,5 @@ export function shapeToContours(
 
 function withWarning(contours: Contour[], tag: string): ShapeGeometry {
   if (contours.length > 0) return { contours, warnings: [] };
-  return { contours: [], warnings: [`Фигура <${tag}> пустая и пропущена`] };
+  return { contours: [], warnings: [t('warn.emptyShapeTag', { tag })] };
 }

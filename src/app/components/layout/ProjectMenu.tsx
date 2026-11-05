@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import clsx from 'clsx';
+import { localeTag } from '@i18n';
 import { useProjectStore } from '../../store/useProjectStore';
+import { useT } from '../../i18n';
 import { ChevronDownIcon, TrashIcon } from '../common/Icon';
 import { Dialog, DialogButton } from '../common/Dialog';
 
@@ -10,6 +12,7 @@ import { Dialog, DialogButton } from '../common/Dialog';
  * confirmation. Names may repeat — the list is keyed by guid.
  */
 export function ProjectMenu() {
+  const t = useT();
   const projectName = useProjectStore((s) => s.projectName);
   const projectId = useProjectStore((s) => s.projectId);
   const library = useProjectStore((s) => s.library);
@@ -68,7 +71,7 @@ export function ProjectMenu() {
         type="button"
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label={`Проект «${projectName}»: список проектов`}
+        aria-label={t('projects.menuAria', { name: projectName })}
         onClick={() => setOpen((value) => !value)}
         className={clsx(
           'flex max-w-64 items-center gap-1 rounded-md border px-2 py-1 text-[11px] transition',
@@ -88,7 +91,7 @@ export function ProjectMenu() {
         >
           {/* Same caption as the panel sections: white, 11 px, semibold, no uppercase. */}
           <div className="flex items-center justify-between px-3 py-2.5 text-[11px] font-semibold text-slate-200">
-            <span>Проекты</span>
+            <span>{t('projects.title')}</span>
             <span className="text-[10px] font-normal tabular-nums text-slate-500">
               {library.length}
             </span>
@@ -97,7 +100,7 @@ export function ProjectMenu() {
           <div className="max-h-72 overflow-y-auto border-t border-slate-800">
             {library.length === 0 && (
               <p className="px-3 py-3 text-[11px] leading-snug text-slate-500">
-                История пуста. Импортируйте SVG — проект сохранится в браузере сам.
+                {t('projects.empty')}
               </p>
             )}
 
@@ -136,7 +139,7 @@ export function ProjectMenu() {
                     <input
                       autoFocus
                       value={draft}
-                      aria-label="Имя проекта"
+                      aria-label={t('projects.nameAria')}
                       // The whole name is selected, so typing replaces it instead of appending.
                       onFocus={(event) => event.currentTarget.select()}
                       onChange={(event) => setDraft(event.target.value)}
@@ -155,24 +158,24 @@ export function ProjectMenu() {
                       className="min-w-0 flex-1 rounded border border-sky-500 bg-slate-950 px-1 py-0 text-xs text-white outline-none"
                     />
                   ) : (
-                    <span className="truncate" title="Двойной клик — переименовать">
+                    <span className="truncate" title={t('projects.renameHint')}>
                       {item.name}
                     </span>
                   )}
 
                   {item.id === projectId && (
                     <span className="shrink-0 rounded bg-sky-500/15 px-1 text-[9px] text-sky-300">
-                      открыт
+                      {t('projects.open')}
                     </span>
                   )}
 
                   <span className="ml-auto shrink-0 text-[10px] tabular-nums text-slate-500">
-                    {formatUpdatedAt(item.updatedAt)}
+                    {formatUpdatedAt(item.updatedAt, t)}
                   </span>
 
                   <button
                     type="button"
-                    aria-label={`Удалить проект «${item.name}»`}
+                    aria-label={t('projects.deleteAria', { name: item.name })}
                     onClick={(event) => {
                       event.stopPropagation();
                       setDeletingId(item.id);
@@ -190,11 +193,11 @@ export function ProjectMenu() {
 
       {deleting && (
         <Dialog
-          title="Удалить проект?"
+          title={t('projects.deleteTitle')}
           onClose={() => setDeletingId(null)}
           footer={
             <>
-              <DialogButton onClick={() => setDeletingId(null)}>Отмена</DialogButton>
+              <DialogButton onClick={() => setDeletingId(null)}>{t('common.cancel')}</DialogButton>
               <DialogButton
                 variant="danger"
                 onClick={() => {
@@ -203,13 +206,12 @@ export function ProjectMenu() {
                   void deleteLibraryProject(deleting.id);
                 }}
               >
-                Удалить
+                {t('common.delete')}
               </DialogButton>
             </>
           }
         >
-          «{deleting.name}» исчезнет из истории браузера. Скачанный файл проекта, если он есть,
-          останется на диске.
+          {t('projects.deleteBody', { name: deleting.name })}
         </Dialog>
       )}
     </div>
@@ -220,12 +222,17 @@ export function ProjectMenu() {
 const DOUBLE_CLICK_MS = 220;
 
 /** "сегодня, 14:32" / "вчера, 09:10" / "04.11.2025" — when the project was last edited. */
-function formatUpdatedAt(timestamp: number): string {
+function formatUpdatedAt(timestamp: number, t: ReturnType<typeof useT>): string {
   const date = new Date(timestamp);
-  const time = date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+  const time = date.toLocaleTimeString(localeTag(), { hour: '2-digit', minute: '2-digit' });
   const sameDay = (a: Date, b: Date): boolean => a.toDateString() === b.toDateString();
   const today = new Date();
-  if (sameDay(date, today)) return `сегодня, ${time}`;
-  if (sameDay(date, new Date(today.getTime() - 86_400_000))) return `вчера, ${time}`;
-  return date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  if (sameDay(date, today)) return t('projects.today', { time });
+  if (sameDay(date, new Date(today.getTime() - 86_400_000)))
+    return t('projects.yesterday', { time });
+  return date.toLocaleDateString(localeTag(), {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
 }

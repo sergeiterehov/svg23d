@@ -5,6 +5,7 @@ import type {
   PartMesh,
   ResolvedLeaf,
 } from '@core/model/types';
+import type { Locale } from '@i18n';
 
 /** Worker protocol (ADR-0010). */
 
@@ -12,6 +13,8 @@ export interface BuildRequestMessage {
   type: 'build';
   jobId: number;
   leaves: ResolvedLeaf[];
+  /** The worker has its own module state, so the language travels with every job (ADR-0037). */
+  locale: Locale;
 }
 
 export interface CancelRequestMessage {

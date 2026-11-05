@@ -90,7 +90,7 @@ describe('library', () => {
       lighting: 'flat' as const,
       mode2d: 'asis' as const,
     };
-    saveAppSettings({ viewMode: '2d', view });
+    saveAppSettings({ viewMode: '2d', view, locale: 'auto' });
 
     useProjectStore.getState().importSvg(svg('#ff0000'), 'one.svg');
     const global = useProjectStore.getState().project?.global;
@@ -236,15 +236,15 @@ describe('folded rows', () => {
 describe('app settings', () => {
   it('are stored apart from the projects', () => {
     const view = { ...DEFAULT_GLOBAL_SETTINGS.view, lighting: 'flat' as const };
-    saveAppSettings({ viewMode: '2d', view });
-    expect(loadAppSettings()).toEqual({ viewMode: '2d', view });
+    saveAppSettings({ viewMode: '2d', view, locale: 'en' });
+    expect(loadAppSettings()).toEqual({ viewMode: '2d', view, locale: 'en' });
     expect(useProjectStore.getState().project?.global.view.lighting).not.toBe('flat');
   });
 
   it('win over the view stored in the project when it is reopened', async () => {
     useProjectStore.getState().importSvg(svg('#ff0000'), 'logo.svg');
     await useProjectStore.getState().persist();
-    saveAppSettings({ viewMode: '2d', view: DEFAULT_GLOBAL_SETTINGS.view });
+    saveAppSettings({ viewMode: '2d', view: DEFAULT_GLOBAL_SETTINGS.view, locale: 'auto' });
 
     await reload();
     expect(useProjectStore.getState().viewMode).toBe('2d');

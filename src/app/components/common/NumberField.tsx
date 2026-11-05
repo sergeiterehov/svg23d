@@ -2,6 +2,7 @@ import { useState } from 'react';
 import clsx from 'clsx';
 import { HelpHint, ResetIcon } from './Icon';
 import { FieldPrefix, FieldShell, type FieldProps } from './Field';
+import { useT } from '../../i18n';
 
 interface NumberFieldProps extends FieldProps {
   /** Accessible name; also the caption above the field when there is no icon or letter. */
@@ -60,11 +61,14 @@ export function NumberField({
   step = 0.1,
   min,
   max,
-  suffix = 'мм',
+  suffix,
   hint,
   disabled,
   showReset = false,
 }: NumberFieldProps) {
+  const t = useT();
+  // «mm» unless the field names its own unit (percent, count).
+  const shownSuffix = suffix ?? t('unit.mm');
   // Derived state: the draft is discarded whenever the committed value changes
   // (reset button, undo, switching selection).
   const [draft, setDraft] = useState<string | null>(null);
@@ -110,16 +114,16 @@ export function NumberField({
       prefix={<FieldPrefix icon={icon} prefix={prefix} />}
       suffix={
         <>
-          {suffix && (
+          {shownSuffix && (
             <span className="shrink-0 select-none text-[10px] leading-none text-slate-500">
-              {suffix}
+              {shownSuffix}
             </span>
           )}
           {showReset && (
             <button
               type="button"
-              title="Сбросить к наследуемому значению"
-              aria-label="Сбросить к наследуемому значению"
+              title={t('field.reset')}
+              aria-label={t('field.reset')}
               onClick={(event) => {
                 event.preventDefault();
                 setDraft(null);

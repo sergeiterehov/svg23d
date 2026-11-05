@@ -3,6 +3,7 @@ import Module from 'manifold-3d';
 import type { ManifoldToplevel } from 'manifold-3d';
 import wasmUrl from 'manifold-3d/manifold.wasm?url';
 import { buildModel } from '@core/solver/buildModel';
+import { setLocale, t } from '@i18n';
 import type { WorkerRequest, WorkerResponse } from './contracts';
 
 /**
@@ -41,7 +42,7 @@ async function handleBuild(
   const api = await loadApi();
   if (jobId !== latestJobId) return;
 
-  post({ type: 'progress', jobId, stage: 'Построение тел', ratio: 0.1 });
+  post({ type: 'progress', jobId, stage: t('status.building'), ratio: 0.1 });
 
   const started = Date.now();
   const result = buildModel({ api, leaves });
@@ -80,6 +81,8 @@ scope.onmessage = (event: MessageEvent<WorkerRequest>) => {
   }
   if (message.type === 'build') {
     latestJobId = message.jobId;
+    // The warnings are built in the worker: it has to speak the language the UI is showing.
+    setLocale(message.locale);
     handleBuild(message.jobId, message.leaves).catch((error: unknown) => {
       post({
         type: 'error',

@@ -3,6 +3,7 @@ import { fallbackFillOf } from '@core/solver/resolveLeaves';
 import { findUnionOwner } from '@core/solver/selection';
 import { ColorChip } from './Toggle';
 import { FolderIcon, UnionIcon } from './Icon';
+import { useT } from '../../i18n';
 
 /**
  * The little mark in front of an element's name (ADR-0004 tree, ADR-0006 inspector).
@@ -50,17 +51,22 @@ export function NodeIcon({
   className?: string;
 }) {
   const { colour, unionOwner } = nodeColour(root, settings, node);
+  const t = useT();
 
   if (node.union === true) {
     return (
-      <span className={className} style={{ color: readableIconColour(colour) }} title="Объединение">
+      <span
+        className={className}
+        style={{ color: readableIconColour(colour) }}
+        title={t('tree.unionLabel')}
+      >
         <UnionIcon style={{ width: size, height: size }} className="block" />
       </span>
     );
   }
   if (node.kind === 'group' && !unionOwner) {
     return (
-      <span className={className} title="Группа">
+      <span className={className} title={t('tree.groupLabel')}>
         <FolderIcon style={{ width: size, height: size }} className="block" />
       </span>
     );

@@ -1,4 +1,5 @@
 import type { SvgDocNode, SvgDocument } from './types';
+import { t } from '@i18n';
 
 /**
  * Structural edits on top of the parsed document (see ADR-0026).
@@ -100,7 +101,7 @@ export function applyTreeEdit(document: SvgDocument, edit: TreeEdit): SvgDocumen
       id,
       tag: 'g',
       kind: 'group',
-      name: edit.names[id] ?? 'Группа',
+      name: edit.names[id] ?? t('name.group'),
       fill: 'none',
       fillRule: 'nonzero',
       hidden: false,
@@ -284,7 +285,7 @@ export function createGroup(
   }
 
   const next: TreeEdit = {
-    names: { ...edit.names, [groupId]: name || `Группа ${number}` },
+    names: { ...edit.names, [groupId]: name || t('name.groupNumbered', { number }) },
     parents: { ...edit.parents },
     groups: [...edit.groups, groupId],
     removed: [...edit.removed],

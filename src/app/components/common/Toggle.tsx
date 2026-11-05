@@ -1,5 +1,6 @@
 import clsx from 'clsx';
 import { HelpHint } from './Icon';
+import { useT } from '../../i18n';
 
 interface ToggleProps {
   label: string;
@@ -21,6 +22,7 @@ export function Toggle({
   mixed = false,
   disabled = false,
 }: ToggleProps) {
+  const t = useT();
   return (
     <div className="flex items-center gap-2">
       <button
@@ -60,7 +62,7 @@ export function Toggle({
         >
           {label}
         </button>
-        {mixed && <span className="shrink-0 text-[10px] text-slate-500">разное</span>}
+        {mixed && <span className="shrink-0 text-[10px] text-slate-500">{t('common.mixed')}</span>}
         {hint && <HelpHint text={hint} />}
       </span>
     </div>

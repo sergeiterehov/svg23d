@@ -26,6 +26,8 @@ import {
 } from '../common/Icon';
 import { SelectField } from '../common/Select';
 import { NodeIcon } from '../common/NodeIcon';
+import { useT } from '../../i18n';
+import { formatNumber, t as translate } from '@i18n';
 
 /**
  * Right panel shows exactly one mode (ADR-0006 UI note): settings of the selected element,
@@ -65,20 +67,22 @@ function Pair({ children }: { children: React.ReactNode }) {
 }
 
 function BackToProject() {
+  const t = useT();
   const select = useProjectStore((s) => s.select);
   return (
     <button
       type="button"
       onClick={() => select(null)}
-      title="К настройкам проекта"
+      title={t('inspector.backToProject')}
       className="shrink-0 text-[10px] text-slate-500 transition hover:text-slate-200"
     >
-      к проекту ✕
+      {t('inspector.backShort')}
     </button>
   );
 }
 
 function ElementPanel({ node }: { node: SvgDocNode }) {
+  const t = useT();
   const project = useProjectStore((s) => s.project);
   const updateSettings = useProjectStore((s) => s.updateSettings);
   const select = useProjectStore((s) => s.select);
@@ -98,7 +102,7 @@ function ElementPanel({ node }: { node: SvgDocNode }) {
 
   return (
     <>
-      <FieldSection title="Элемент" right={<BackToProject />}>
+      <FieldSection title={t('inspector.element')} right={<BackToProject />}>
         <div className="flex items-center gap-2">
           <NodeIcon
             node={node}
@@ -112,32 +116,27 @@ function ElementPanel({ node }: { node: SvgDocNode }) {
             <div className="truncate text-[10px] text-slate-500">
               {node.tag} · {node.id} ·{' '}
               {node.union
-                ? 'объединение'
+                ? t('inspector.kind.union')
                 : unionParent
-                  ? 'часть объединения'
+                  ? t('inspector.kind.unionPart')
                   : node.kind === 'group'
-                    ? 'группа'
-                    : 'фигура'}
+                    ? t('inspector.kind.group')
+                    : t('inspector.kind.shape')}
             </div>
           </div>
         </div>
         {node.union && (
-          <p className="text-[10px] leading-snug text-slate-500">
-            Объединение: фигуры внутри слиты в одну деталь на 2D-уровне, их личные настройки не
-            учитываются — высоты, фаска и допуск действуют на всё тело. Содержимое можно менять:
-            перетаскивать, удалять и добавлять части.
-          </p>
+          <p className="text-[10px] leading-snug text-slate-500">{t('inspector.unionNote')}</p>
         )}
         {unionParent && (
           <p className="text-[10px] leading-snug text-amber-400/90">
-            Часть объединения «{unionParent.name}»: печатается одним телом, личные настройки части
-            не действуют.{' '}
+            {t('inspector.unionPartOf', { name: unionParent.name })}{' '}
             <button
               type="button"
               onClick={() => select(unionParent.id)}
               className="text-sky-400 transition hover:text-sky-300"
             >
-              Выбрать объединение
+              {t('inspector.selectUnion')}
             </button>
           </p>
         )}
@@ -147,13 +146,10 @@ function ElementPanel({ node }: { node: SvgDocNode }) {
 
       {!unionParent && (
         <>
-          <FieldSection
-            title="Высота"
-            hint="Нижняя и верхняя граница выдавливания. «До» не может быть ниже «от»."
-          >
+          <FieldSection title={t('inspector.height')} hint={t('inspector.heightHint')}>
             <Pair>
               <NumberField
-                label="Высота от"
+                label={t('field.zFrom')}
                 icon={HeightFromIcon}
                 value={own.zFrom}
                 placeholder={String(round(effective.zFrom))}
@@ -166,7 +162,7 @@ function ElementPanel({ node }: { node: SvgDocNode }) {
                 }
               />
               <NumberField
-                label="Высота до"
+                label={t('field.zTo')}
                 icon={HeightToIcon}
                 value={own.zTo}
                 placeholder={String(round(effective.zTo))}
@@ -178,19 +174,14 @@ function ElementPanel({ node }: { node: SvgDocNode }) {
               />
             </Pair>
             {effective.zTo < effective.zFrom && (
-              <p className="text-[11px] text-rose-400">
-                «До» меньше «от» — элемент не будет напечатан.
-              </p>
+              <p className="text-[11px] text-rose-400">{t('inspector.heightInvalid')}</p>
             )}
           </FieldSection>
 
-          <FieldSection
-            title="Фаска"
-            hint="Снятие под 45° на верхней и нижней грани; не больше половины высоты элемента."
-          >
+          <FieldSection title={t('inspector.chamfer')} hint={t('inspector.chamferHint')}>
             <Pair>
               <NumberField
-                label="Фаска сверху"
+                label={t('field.chamferTop')}
                 icon={ChamferTopIcon}
                 value={own.chamferTop}
                 placeholder={String(round(effective.chamferTop))}
@@ -206,7 +197,7 @@ function ElementPanel({ node }: { node: SvgDocNode }) {
                 }
               />
               <NumberField
-                label="Фаска снизу"
+                label={t('field.chamferBottom')}
                 icon={ChamferBottomIcon}
                 value={own.chamferBottom}
                 placeholder={String(round(effective.chamferBottom))}
@@ -224,12 +215,9 @@ function ElementPanel({ node }: { node: SvgDocNode }) {
             </Pair>
           </FieldSection>
 
-          <FieldSection
-            title="Гнёзда"
-            hint="Зазор на сторону: отверстие под этот элемент будет больше на 2× значения. Гнездо вырезается в деталях, которые лежат ниже."
-          >
+          <FieldSection title={t('inspector.sockets')} hint={t('inspector.socketsHint')}>
             <NumberField
-              label="Допуск"
+              label={t('field.clearance')}
               icon={ClearanceIcon}
               value={own.clearance}
               placeholder={String(round(effective.clearance))}
@@ -245,22 +233,22 @@ function ElementPanel({ node }: { node: SvgDocNode }) {
               }
             />
             <Toggle
-              label="Отдельная деталь"
+              label={t('inspector.isPart')}
               checked={own.isPart === true}
               onChange={(checked) =>
                 updateSettings(node.id, { isPart: checked ? true : undefined })
               }
-              hint="Верхние элементы будут вырезать гнёзда в этой детали"
+              hint={t('inspector.isPartHint')}
             />
           </FieldSection>
 
-          <FieldSection title="Вид">
+          <FieldSection title={t('inspector.appearance')}>
             <ColorField
               value={own.colorOverride ?? fallbackFillOf(node)}
               // A group has no colour of its own: its children bring their own, so "none" is the default.
               empty={
                 node.kind === 'group' && !node.union && own.colorOverride === undefined
-                  ? 'нет'
+                  ? t('common.none')
                   : undefined
               }
               mixed={false}
@@ -272,27 +260,27 @@ function ElementPanel({ node }: { node: SvgDocNode }) {
               }
             />
             <Toggle
-              label="Скрыть"
+              label={t('inspector.hide')}
               checked={effective.hidden}
               // A group hides its whole subtree; a child cannot undo that on its own.
               disabled={effective.hidden && own.hidden !== true}
               hint={
                 effective.hidden && own.hidden !== true
-                  ? 'Элемент скрыт вместе с группой — снимите «Скрыть» у группы'
-                  : 'Только вид: не рисуется в 3D и не идёт в экспорт; объём и гнёзда не меняются'
+                  ? t('inspector.hideInherited')
+                  : t('inspector.hideHint')
               }
               onChange={(checked) =>
                 updateSettings(node.id, { hidden: checked ? true : undefined })
               }
             />
             <Toggle
-              label="Игнорировать"
+              label={t('inspector.ignore')}
               checked={effective.ignored}
               disabled={effective.ignored && own.ignored !== true}
               hint={
                 effective.ignored && own.ignored !== true
-                  ? 'Элемент уже вне модели: так у группы или в самом файле (display:none)'
-                  : 'Эквивалентно удалению: элемент не входит в модель, но остаётся в проекте'
+                  ? t('inspector.ignoreInherited')
+                  : t('inspector.ignoreHint')
               }
               onChange={(checked) =>
                 updateSettings(node.id, { ignored: checked ? true : undefined })
@@ -312,6 +300,7 @@ function ElementPanel({ node }: { node: SvgDocNode }) {
  * is about the body and this block is about what the body is made of. A row selects that element.
  */
 function ElementsSection({ node }: { node: SvgDocNode }) {
+  const t = useT();
   const project = useProjectStore((s) => s.project);
   const select = useProjectStore((s) => s.select);
 
@@ -320,7 +309,7 @@ function ElementsSection({ node }: { node: SvgDocNode }) {
   const children = [...orderedChildren(node, project.settings)].reverse();
 
   return (
-    <FieldSection title="Элементы" hint="Состав контейнера. Клик по строке выбирает элемент.">
+    <FieldSection title={t('inspector.elements')} hint={t('inspector.elementsHint')}>
       <ul className="flex flex-col gap-0.5">
         {children.map((child) => (
           <li key={child.id}>
@@ -356,6 +345,7 @@ function ElementsSection({ node }: { node: SvgDocNode }) {
  * not offered: a piece inside a merged body cannot be hidden from the view on its own.
  */
 function UnionPartSections({ node, unionParent }: { node: SvgDocNode; unionParent: SvgDocNode }) {
+  const t = useT();
   const project = useProjectStore((s) => s.project);
   const updateSettings = useProjectStore((s) => s.updateSettings);
   if (!project) return null;
@@ -369,14 +359,14 @@ function UnionPartSections({ node, unionParent }: { node: SvgDocNode; unionParen
 
   return (
     <FieldSection
-      title={`Часть объединения «${unionParent.name}»`}
-      hint="Высоты, фаска, допуск и цвет задаются у самого объединения: части сливаются в одно тело до выдавливания."
+      title={t('inspector.unionPart', { name: unionParent.name })}
+      hint={t('inspector.unionPartHint')}
     >
       <Toggle
-        label="Игнорировать часть"
+        label={t('inspector.ignorePart')}
         checked={effective?.ignored === true}
         disabled={effective?.ignored === true && own.ignored !== true}
-        hint="Эквивалентно удалению: часть не входит в объединение — например, чтобы убрать обводку"
+        hint={t('inspector.ignorePartHint')}
         onChange={(checked) => updateSettings(node.id, { ignored: checked ? true : undefined })}
       />
     </FieldSection>
@@ -387,6 +377,7 @@ type NumericKey = 'zFrom' | 'zTo' | 'clearance' | 'chamferTop' | 'chamferBottom'
 
 /** Settings panel for a multi-selection: equal values are shown, different ones as a range. */
 function MultiPanel({ nodes }: { nodes: SvgDocNode[] }) {
+  const t = useT();
   const project = useProjectStore((s) => s.project);
   const updateSettingsBatch = useProjectStore((s) => s.updateSettingsBatch);
 
@@ -453,14 +444,16 @@ function MultiPanel({ nodes }: { nodes: SvgDocNode[] }) {
   // Every selected node is a part of a union: nothing here can reach the model.
   if (unionParents.every((parent) => parent !== null)) {
     return (
-      <FieldSection title={`Выбрано: ${nodes.length}`} right={<BackToProject />}>
+      <FieldSection
+        title={t('inspector.selectedCount', { count: nodes.length })}
+        right={<BackToProject />}
+      >
         <p className="truncate text-[11px] text-slate-500">
           {namesText}
-          {nodes.length > 4 ? ` и ещё ${nodes.length - 4}` : ''}
+          {nodes.length > 4 ? t('inspector.andMore', { count: nodes.length - 4 }) : ''}
         </p>
         <p className="text-[10px] leading-snug text-amber-400/90">
-          Это части объединений: каждая печатается в составе своего тела, поэтому высоты, фаска и
-          допуск задаются у самого объединения. Исключить часть из тела можно в свойствах части.
+          {t('inspector.multiUnionOnly')}
         </p>
       </FieldSection>
     );
@@ -469,25 +462,25 @@ function MultiPanel({ nodes }: { nodes: SvgDocNode[] }) {
   return (
     <>
       <FieldSection
-        title={`Выбрано: ${nodes.length}`}
-        hint="⌘/Ctrl-клик по дереву добавляет элемент к выбору. Пустое поле с разбросом вроде «12-15» значит разные значения."
+        title={t('inspector.selectedCount', { count: nodes.length })}
+        hint={t('inspector.multiHint')}
         right={<BackToProject />}
       >
         <p className="truncate text-[11px] text-slate-500">
           {namesText}
-          {nodes.length > 4 ? ` и ещё ${nodes.length - 4}` : ''}
+          {nodes.length > 4 ? t('inspector.andMore', { count: nodes.length - 4 }) : ''}
         </p>
         {unionParents.some((parent) => parent !== null) && (
           <p className="text-[10px] leading-snug text-amber-400/90">
-            Части объединений в выборке: их личные настройки не действуют.
+            {t('inspector.multiUnionMixed')}
           </p>
         )}
       </FieldSection>
 
-      <FieldSection title="Высота" hint="Применяется ко всем выбранным элементам.">
+      <FieldSection title={t('inspector.height')} hint={t('inspector.multiHeightHint')}>
         <Pair>
           <NumberField
-            label="Высота от"
+            label={t('field.zFrom')}
             icon={HeightFromIcon}
             value={zFrom.value}
             placeholder={zFrom.placeholder}
@@ -496,7 +489,7 @@ function MultiPanel({ nodes }: { nodes: SvgDocNode[] }) {
             onDelta={(delta) => zFrom.delta(delta)}
           />
           <NumberField
-            label="Высота до"
+            label={t('field.zTo')}
             icon={HeightToIcon}
             value={zTo.value}
             placeholder={zTo.placeholder}
@@ -508,20 +501,13 @@ function MultiPanel({ nodes }: { nodes: SvgDocNode[] }) {
         {nodes.some((node) => {
           const settings = effectiveOf(node);
           return settings ? settings.zTo < settings.zFrom : false;
-        }) && (
-          <p className="text-[11px] text-rose-400">
-            У части элементов «до» меньше «от» — они не будут напечатаны.
-          </p>
-        )}
+        }) && <p className="text-[11px] text-rose-400">{t('inspector.multiHeightInvalid')}</p>}
       </FieldSection>
 
-      <FieldSection
-        title="Фаска"
-        hint="Снятие под 45° на верхней и нижней грани (не больше половины высоты элемента)."
-      >
+      <FieldSection title={t('inspector.chamfer')} hint={t('inspector.multiChamferHint')}>
         <Pair>
           <NumberField
-            label="Фаска сверху"
+            label={t('field.chamferTop')}
             icon={ChamferTopIcon}
             value={chamferTop.value}
             placeholder={chamferTop.placeholder}
@@ -531,7 +517,7 @@ function MultiPanel({ nodes }: { nodes: SvgDocNode[] }) {
             onDelta={(delta) => chamferTop.delta(delta, 0)}
           />
           <NumberField
-            label="Фаска снизу"
+            label={t('field.chamferBottom')}
             icon={ChamferBottomIcon}
             value={chamferBottom.value}
             placeholder={chamferBottom.placeholder}
@@ -543,12 +529,9 @@ function MultiPanel({ nodes }: { nodes: SvgDocNode[] }) {
         </Pair>
       </FieldSection>
 
-      <FieldSection
-        title="Гнёзда"
-        hint="Зазор на сторону в гнёздах, которые эти элементы вырезают."
-      >
+      <FieldSection title={t('inspector.sockets')} hint={t('inspector.multiSocketsHint')}>
         <NumberField
-          label="Допуск"
+          label={t('field.clearance')}
           icon={ClearanceIcon}
           value={clearance.value}
           placeholder={clearance.placeholder}
@@ -559,15 +542,15 @@ function MultiPanel({ nodes }: { nodes: SvgDocNode[] }) {
           onDelta={(delta) => clearance.delta(delta, 0)}
         />
         <Toggle
-          label="Отдельная деталь"
+          label={t('inspector.isPart')}
           checked={isPart.checked}
           mixed={isPart.mixed}
           onChange={(checked) => setFlags('isPart', checked)}
-          hint="Применяется ко всем выбранным элементам"
+          hint={t('inspector.multiIsPartHint')}
         />
       </FieldSection>
 
-      <FieldSection title="Вид">
+      <FieldSection title={t('inspector.appearance')}>
         <ColorField
           value={colors[0]}
           mixed={!colorsEqual}
@@ -589,18 +572,18 @@ function MultiPanel({ nodes }: { nodes: SvgDocNode[] }) {
           }
         />
         <Toggle
-          label="Скрыть"
+          label={t('inspector.hide')}
           checked={hidden.checked}
           mixed={hidden.mixed}
           onChange={(checked) => setFlags('hidden', checked)}
-          hint="Только вид: не рисуется в 3D и не идёт в экспорт"
+          hint={t('inspector.multiHideHint')}
         />
         <Toggle
-          label="Игнорировать"
+          label={t('inspector.ignore')}
           checked={ignored.checked}
           mixed={ignored.mixed}
           onChange={(checked) => setFlags('ignored', checked)}
-          hint="Эквивалентно удалению: элементы не входят в модель"
+          hint={t('inspector.multiIgnoreHint')}
         />
       </FieldSection>
     </>
@@ -623,14 +606,15 @@ function ColorField({
   onPick: (color: string) => void;
   onReset: (() => void) | null;
 }) {
+  const t = useT();
   return (
     <div className="flex items-center justify-between gap-2">
-      <span className="text-[11px] text-slate-400">Цвет модели</span>
+      <span className="text-[11px] text-slate-400">{t('inspector.colour')}</span>
       <span className="flex items-center gap-1.5">
         {mixed && (
           <>
             <MixedColorChip colors={mixedColors ?? [value, value]} size={12} />
-            <span className="text-[10px] text-slate-500">разное</span>
+            <span className="text-[10px] text-slate-500">{t('common.mixed')}</span>
           </>
         )}
         {empty && <span className="text-[10px] text-slate-500">{empty}</span>}
@@ -647,7 +631,7 @@ function ColorField({
           </span>
           <input
             type="color"
-            aria-label="Цвет модели"
+            aria-label={t('inspector.colour')}
             value={value}
             onChange={(event) => onPick(event.target.value)}
             className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
@@ -656,8 +640,8 @@ function ColorField({
         {onReset && (
           <button
             type="button"
-            title="Сбросить к цвету из документа"
-            aria-label="Сбросить цвет"
+            title={t('inspector.colourReset')}
+            aria-label={t('inspector.colourResetAria')}
             onClick={onReset}
             className="grid h-7 w-7 place-items-center rounded-md bg-slate-800/60 text-slate-500 transition hover:bg-slate-800 hover:text-white"
           >
@@ -670,6 +654,7 @@ function ColorField({
 }
 
 function ProjectPanel() {
+  const t = useT();
   const project = useProjectStore((s) => s.project);
   const updateGlobal = useProjectStore((s) => s.updateGlobal);
 
@@ -678,19 +663,14 @@ function ProjectPanel() {
 
   return (
     <>
-      <FieldSection title="Настройки проекта">
-        <p className="text-[10px] leading-snug text-slate-500">
-          Значения по умолчанию для всех элементов
-        </p>
+      <FieldSection title={t('project.settings')}>
+        <p className="text-[10px] leading-snug text-slate-500">{t('project.defaults')}</p>
       </FieldSection>
 
-      <FieldSection
-        title="Размер"
-        hint="Ширина, высота или бо́льшая сторона модели в мм; пропорции сохраняются."
-      >
+      <FieldSection title={t('project.size')} hint={t('project.sizeHint')}>
         <Pair>
           <NumberField
-            label="Размер модели"
+            label={t('project.sizeField')}
             icon={SizeIcon}
             value={global.fitSizeMm}
             placeholder=""
@@ -703,23 +683,23 @@ function ProjectPanel() {
             }
           />
           <SelectField
-            label="Подгонять по"
-            prefix="по"
+            label={t('project.fit')}
+            prefix={t('project.fitPrefix')}
             value={global.fit}
             options={[
-              { value: 'max', label: 'максимуму' },
-              { value: 'width', label: 'ширине' },
-              { value: 'height', label: 'высоте' },
+              { value: 'max', label: t('project.fit.max') },
+              { value: 'width', label: t('project.fit.width') },
+              { value: 'height', label: t('project.fit.height') },
             ]}
             onChange={(value) => updateGlobal({ fit: value as 'width' | 'height' | 'max' })}
           />
         </Pair>
       </FieldSection>
 
-      <FieldSection title="Высота" hint="Границы выдавливания по умолчанию, мм.">
+      <FieldSection title={t('project.height')} hint={t('project.heightHint')}>
         <Pair>
           <NumberField
-            label="Высота от"
+            label={t('field.zFrom')}
             icon={HeightFromIcon}
             value={global.defaultZFrom}
             placeholder=""
@@ -728,7 +708,7 @@ function ProjectPanel() {
             onDelta={(delta) => updateGlobal({ defaultZFrom: round(global.defaultZFrom + delta) })}
           />
           <NumberField
-            label="Высота до"
+            label={t('field.zTo')}
             icon={HeightToIcon}
             value={global.defaultZTo}
             placeholder=""
@@ -739,10 +719,10 @@ function ProjectPanel() {
         </Pair>
       </FieldSection>
 
-      <FieldSection title="Фаска" hint="Снятие под 45° на верхней и нижней грани по умолчанию.">
+      <FieldSection title={t('project.chamfer')} hint={t('project.chamferHint')}>
         <Pair>
           <NumberField
-            label="Фаска сверху"
+            label={t('field.chamferTop')}
             icon={ChamferTopIcon}
             value={global.defaultChamferTop}
             placeholder=""
@@ -756,7 +736,7 @@ function ProjectPanel() {
             }
           />
           <NumberField
-            label="Фаска снизу"
+            label={t('field.chamferBottom')}
             icon={ChamferBottomIcon}
             value={global.defaultChamferBottom}
             placeholder=""
@@ -772,9 +752,9 @@ function ProjectPanel() {
         </Pair>
       </FieldSection>
 
-      <FieldSection title="Допуск" hint="Зазор на сторону в гнёздах между соседними деталями.">
+      <FieldSection title={t('project.clearance')} hint={t('project.clearanceHint')}>
         <NumberField
-          label="Допуск"
+          label={t('field.clearance')}
           icon={ClearanceIcon}
           value={global.defaultClearance}
           placeholder=""
@@ -787,27 +767,22 @@ function ProjectPanel() {
         />
       </FieldSection>
 
-      <FieldSection
-        title="Качество кривых"
-        hint="Допуск спрямления кривых: точнее — больше треугольников и медленнее расчёт"
-      >
+      <FieldSection title={t('project.quality')} hint={t('project.qualityHint')}>
         <SelectField
-          label="Качество кривых"
+          label={t('project.quality')}
           icon={CurveIcon}
           value={String(global.flatness)}
           options={[
-            { value: '0.05', label: 'Черновое' },
-            { value: '0.02', label: 'Обычное' },
-            { value: '0.01', label: 'Точное' },
-            { value: '0.005', label: 'Максимальное' },
+            { value: '0.05', label: t('project.quality.draft') },
+            { value: '0.02', label: t('project.quality.normal') },
+            { value: '0.01', label: t('project.quality.fine') },
+            { value: '0.005', label: t('project.quality.max') },
           ]}
           onChange={(value) => updateGlobal({ flatness: Number(value) })}
         />
       </FieldSection>
 
-      <p className="px-3 py-3 text-[10px] leading-snug text-slate-500">
-        Чтобы настроить конкретный элемент, выберите его в дереве слева.
-      </p>
+      <p className="px-3 py-3 text-[10px] leading-snug text-slate-500">{t('project.hint')}</p>
     </>
   );
 }
@@ -818,6 +793,7 @@ function ProjectPanel() {
  * же собирается список печатных тел, поэтому блоки не меняют вид и смысл при смене выбора.
  */
 function StatsPanel() {
+  const t = useT();
   const result = useProjectStore((s) => s.result);
   const project = useProjectStore((s) => s.project);
   const parts = useProjectStore((s) => s.parts);
@@ -864,25 +840,26 @@ function StatsPanel() {
 
   return (
     <>
-      <FieldSection title="Результат">
+      <FieldSection title={t('stats.result')}>
         {!result || !project || !totals ? (
           <EmptyStats />
         ) : missing ? (
           <p className="text-[11px] leading-snug text-slate-500">
-            {ignored
-              ? 'Элемент игнорируется: его нет в модели, как после удаления. Снимите «Игнорировать», чтобы вернуть.'
-              : 'Элемент не вошёл в модель: полностью перекрыт верхними элементами или пуст.'}
+            {ignored ? t('stats.ignoredMissing') : t('stats.notInModel')}
           </p>
         ) : (
           <dl className="space-y-1 text-[11px]">
             <Row
-              label="Деталей"
+              label={t('stats.parts')}
               value={String(scope ? scopeParts.length : result.stats.partCount)}
             />
-            <Row label="Треугольников" value={totals.triangles.toLocaleString('ru-RU')} />
-            <Row label="Объём" value={formatVolume(totals.volume)} />
-            <Row label="Габариты" value={formatBox(totals.box)} />
-            <Row label="Время" value={`${result.stats.durationMs} мс`} />
+            <Row label={t('stats.triangles')} value={formatNumber(totals.triangles)} />
+            <Row label={t('stats.volume')} value={formatVolume(totals.volume)} />
+            <Row label={t('stats.box')} value={formatBox(totals.box)} />
+            <Row
+              label={t('stats.time')}
+              value={t('stats.timeValue', { ms: result.stats.durationMs })}
+            />
           </dl>
         )}
       </FieldSection>
@@ -895,24 +872,23 @@ function StatsPanel() {
 
 /** Same rows as a built model, so the panel keeps its shape before anything is loaded. */
 function EmptyStats() {
+  const t = useT();
   return (
     <dl className="space-y-1 text-[11px]">
-      <Row label="Деталей" value="—" />
-      <Row label="Треугольников" value="—" />
-      <Row label="Объём" value="—" />
-      <Row label="Габариты" value="—" />
-      <Row label="Время" value="—" />
+      <Row label={t('stats.parts')} value="—" />
+      <Row label={t('stats.triangles')} value="—" />
+      <Row label={t('stats.volume')} value="—" />
+      <Row label={t('stats.box')} value="—" />
+      <Row label={t('stats.time')} value="—" />
     </dl>
   );
 }
 
 /** Printed bodies of the result, bottom → top — the same block for the project and for a selection. */
 function PartsSection({ parts }: { parts: PartInfo[] }) {
+  const t = useT();
   return (
-    <FieldSection
-      title="Детали"
-      hint="Печатные тела результата: снизу вверх, цвет — тот, которым деталь печатается."
-    >
+    <FieldSection title={t('stats.details')} hint={t('stats.detailsHint')}>
       <ul className="flex flex-col gap-0.5">
         {parts.map((part) => (
           <li
@@ -929,13 +905,13 @@ function PartsSection({ parts }: { parts: PartInfo[] }) {
 }
 
 function formatVolume(mm3: number): string {
-  return `${(mm3 / 1000).toFixed(2)} см³`;
+  return `${(mm3 / 1000).toFixed(2)} ${translate('unit.cm3')}`;
 }
 
 function formatBox(box: BBox3): string {
   return `${round(box.max[0] - box.min[0])} × ${round(box.max[1] - box.min[1])} × ${round(
     box.max[2] - box.min[2],
-  )} мм`;
+  )} ${translate('unit.mm')}`;
 }
 
 function unionBoxes(boxes: BBox3[]): BBox3 {

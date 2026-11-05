@@ -2,6 +2,7 @@ import type { GlobalSettings, NodeSettings, Project } from './types';
 import { PROJECT_VERSION } from './types';
 import { DEFAULT_GLOBAL_SETTINGS } from './defaults';
 import type { TreeEdit } from './treeEdit';
+import { t } from '@i18n';
 
 /**
  * Project file (`*.svg23d.json`): the source SVG plus user settings.
@@ -47,25 +48,25 @@ export function parseProjectFile(text: string): ProjectFile {
   try {
     raw = JSON.parse(text);
   } catch {
-    throw new Error('Файл проекта повреждён: это не JSON');
+    throw new Error(t('error.project.json'));
   }
   if (typeof raw !== 'object' || raw === null) {
-    throw new Error('Файл проекта повреждён');
+    throw new Error(t('error.project.damaged'));
   }
   const candidate = raw as Partial<ProjectFile>;
   if (candidate.app !== 'svg23d') {
-    throw new Error('Это не файл проекта svg23d');
+    throw new Error(t('error.project.app'));
   }
   if (typeof candidate.version !== 'number' || candidate.version > PROJECT_VERSION) {
     throw new Error(
-      `Версия проекта ${String(candidate.version)} не поддерживается (максимум ${PROJECT_VERSION})`,
+      t('error.project.version', { version: String(candidate.version), max: PROJECT_VERSION }),
     );
   }
   if (typeof candidate.source !== 'string') {
-    throw new Error('В файле проекта нет исходного SVG');
+    throw new Error(t('error.project.noSource'));
   }
   if (!candidate.global || typeof candidate.global !== 'object') {
-    throw new Error('В файле проекта нет настроек проекта');
+    throw new Error(t('error.project.noGlobal'));
   }
 
   return {

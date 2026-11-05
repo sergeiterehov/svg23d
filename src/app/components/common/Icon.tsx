@@ -57,6 +57,25 @@ export function ChevronDownIcon({ className }: IconProps) {
   );
 }
 
+/** Interface language: a meridian globe, the usual mark for a language picker. */
+export function GlobeIcon({ className }: IconProps) {
+  return (
+    <Svg className={className}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M3 12h18" />
+      <path d="M12 3a15 15 0 0 1 0 18a15 15 0 0 1 0-18" />
+    </Svg>
+  );
+}
+
+export function CheckIcon({ className }: IconProps) {
+  return (
+    <Svg className={className}>
+      <path d="m5 12 5 5 9-10" />
+    </Svg>
+  );
+}
+
 export function UndoIcon({ className }: IconProps) {
   return (
     <Svg className={className}>

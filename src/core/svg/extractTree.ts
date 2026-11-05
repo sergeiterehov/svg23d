@@ -7,6 +7,7 @@ import type {
   WarningCode,
 } from '../model/types';
 import { bboxOfContours, contentBBoxOf, isEmptyBBox } from '../model/defaults';
+import { t, type MessageKey } from '@i18n';
 import { dedupeRings, flattenPathDataSubpaths, type FlatSubpath } from './flatten';
 import { shapeToContours } from './shapes';
 import { strokeToContours } from './stroke';
@@ -64,10 +65,10 @@ const UNSUPPORTED_TAGS = new Set([
   'canvas',
 ]);
 
-const UNSUPPORTED_ATTRIBUTES: Array<[string, string]> = [
-  ['clip-path', 'clip-path не поддерживается: обрезка не применяется'],
-  ['filter', 'filter не поддерживается: эффект не применяется'],
-  ['stroke-dasharray', 'Пунктир (stroke-dasharray) не поддерживается: обводка будет сплошной'],
+const UNSUPPORTED_ATTRIBUTES: Array<[string, MessageKey]> = [
+  ['clip-path', 'warn.clipPath'],
+  ['filter', 'warn.filter'],
+  ['stroke-dasharray', 'warn.dasharray'],
 ];
 
 const MAX_USE_DEPTH = 8;
@@ -156,7 +157,7 @@ export function extractDocument(svgRoot: Element, options: ExtractOptions): SvgD
     context.warnings.push({
       nodeId: null,
       code: 'no-shapes',
-      message: 'В документе не найдено залитых фигур. Проверьте, что элементы имеют fill.',
+      message: t('warn.noShapes'),
     });
   }
 
@@ -179,7 +180,7 @@ function walkElement(input: WalkInput, context: Context): SvgDocNode[] {
   if (SKIP_TAGS.has(tag) && !allowSkipped) return [];
 
   if (UNSUPPORTED_TAGS.has(tag)) {
-    warn(context, element, 'unsupported-element', `<${tag}> не поддерживается и пропущен`);
+    warn(context, element, 'unsupported-element', t('warn.unsupportedElement', { tag }));
     return [];
   }
 
@@ -189,9 +190,9 @@ function walkElement(input: WalkInput, context: Context): SvgDocNode[] {
   const name = displayName(element, tag, pathKey);
   const build: NodeBuild = { id, tag, name, style, depth };
 
-  for (const [attribute, message] of UNSUPPORTED_ATTRIBUTES) {
+  for (const [attribute, key] of UNSUPPORTED_ATTRIBUTES) {
     if (element.hasAttribute(attribute)) {
-      warn(context, element, 'unsupported-attribute', message, build.id);
+      warn(context, element, 'unsupported-attribute', t(key), build.id);
     }
   }
 
@@ -201,13 +202,7 @@ function walkElement(input: WalkInput, context: Context): SvgDocNode[] {
 
   if (GROUP_TAGS.has(tag)) {
     if (element.hasAttribute('mask')) {
-      warn(
-        context,
-        element,
-        'unsupported-attribute',
-        'Маска на группе не поддерживается — задайте её элементам внутри',
-        id,
-      );
+      warn(context, element, 'unsupported-attribute', t('warn.groupMask'), id);
     }
     const children: SvgDocNode[] = [];
     Array.from(element.children).forEach((child, index) => {
@@ -244,7 +239,7 @@ function walkElement(input: WalkInput, context: Context): SvgDocNode[] {
   }
 
   if (!SHAPE_TAGS.has(tag)) {
-    warn(context, element, 'unsupported-element', `<${tag}> не поддерживается и пропущен`, id);
+    warn(context, element, 'unsupported-element', t('warn.unsupportedElement', { tag }), id);
     return [];
   }
 
@@ -274,12 +269,12 @@ function resolveMask(
 
   const id = /url\(\s*['"]?#([^'")]+)/.exec(raw)?.[1];
   if (!id) {
-    warn(context, element, 'unsupported-attribute', 'mask: не удалось прочитать ссылку', nodeId);
+    warn(context, element, 'unsupported-attribute', t('warn.maskRef'), nodeId);
     return null;
   }
   const maskElement = context.idLookup.get(id);
   if (!maskElement) {
-    warn(context, element, 'unsupported-attribute', `mask: маска «${id}» не найдена`, nodeId);
+    warn(context, element, 'unsupported-attribute', t('warn.maskMissing', { id }), nodeId);
     return null;
   }
   if (context.maskDepth >= 2) return null;
@@ -322,13 +317,7 @@ function resolveMask(
   }
 
   if (include.length === 0) {
-    warn(
-      context,
-      element,
-      'unsupported-attribute',
-      'Маска полностью скрывает элемент — он будет пропущен',
-      nodeId,
-    );
+    warn(context, element, 'unsupported-attribute', t('warn.maskHides'), nodeId);
   }
 
   return { include, exclude };
@@ -437,7 +426,7 @@ function buildShapeNodes(
         id: `${build.id}#stroke`,
         tag,
         kind: 'shape',
-        name: `${build.name} · обводка`,
+        name: `${build.name} · ${t('name.stroke')}`,
         fill: style.stroke,
         fillRule: 'nonzero',
         hidden,
@@ -457,7 +446,7 @@ function buildShapeNodes(
     // part (ADR-0028). A separate node would also cut a socket into the fill.
     // The parts are named for the tree: the union row keeps the element's own name.
     fillShape.id = `${build.id}#fill`;
-    fillShape.name = `${build.name} · заливка`;
+    fillShape.name = `${build.name} · ${t('name.fill')}`;
     nodes.push({
       id: build.id,
       // A union is a group: the tree and the inspector show it like one.
@@ -480,9 +469,7 @@ function buildShapeNodes(
 
   if (nodes.length === 0) {
     const reason =
-      style.fill === 'none' && !style.hasStroke
-        ? 'Нет заливки и обводки — фигура пропущена'
-        : 'Фигура пустая и пропущена';
+      style.fill === 'none' && !style.hasStroke ? t('warn.noFillStroke') : t('warn.emptyShape');
     warn(context, element, 'empty-shape', reason, build.id);
     return [];
   }
@@ -515,22 +502,16 @@ function resolveUse(
     element.getAttribute('xlink:href') ??
     '';
   if (!href.startsWith('#')) {
-    warn(
-      context,
-      element,
-      'unresolved-use',
-      'use ссылается на внешний документ — не поддерживается',
-      build.id,
-    );
+    warn(context, element, 'unresolved-use', t('warn.useExternal'), build.id);
     return [];
   }
   const target = context.idLookup.get(href.slice(1));
   if (!target) {
-    warn(context, element, 'unresolved-use', `use: не найден элемент ${href}`, build.id);
+    warn(context, element, 'unresolved-use', t('warn.useMissing', { href }), build.id);
     return [];
   }
   if (context.useDepth >= MAX_USE_DEPTH) {
-    warn(context, element, 'unresolved-use', 'Слишком глубокая цепочка use — пропущено', build.id);
+    warn(context, element, 'unresolved-use', t('warn.useDeep'), build.id);
     return [];
   }
 
@@ -580,7 +561,7 @@ function flattenPathSafe(
   try {
     return { subpaths: flattenPathDataSubpaths(d, tolerance) };
   } catch (error) {
-    return { subpaths: [], warning: `Не удалось разобрать path: ${(error as Error).message}` };
+    return { subpaths: [], warning: t('warn.pathParse', { error: (error as Error).message }) };
   }
 }
 

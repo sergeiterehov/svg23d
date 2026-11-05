@@ -10,6 +10,7 @@ import type {
 import { applyMatrixToContours } from '../svg/transforms';
 import { computeUnitMapping } from '../svg/units';
 import { orderedChildren } from './order';
+import { t } from '@i18n';
 
 /**
  * Resolves inherited settings into a flat, ordered list of leaves ready for the solver
@@ -179,7 +180,7 @@ export function resolveLeaves(input: ResolveInput): ResolveResult {
         warnings.push({
           nodeId: id,
           code: 'empty-shape',
-          message: `Элемент «${name}» не напечатан: «до» (${effective.zTo}) не больше «от» (${effective.zFrom})`,
+          message: t('warn.badHeight', { name, to: effective.zTo, from: effective.zFrom }),
         });
         return;
       }
@@ -271,7 +272,7 @@ export function resolveLeaves(input: ResolveInput): ResolveResult {
     warnings.push({
       nodeId: null,
       code: 'no-shapes',
-      message: 'Нет элементов для построения модели',
+      message: t('warn.noLeaves'),
     });
   }
 

@@ -2,6 +2,7 @@ import type { Project, SvgDocNode, SvgDocument } from './types';
 import { PROJECT_VERSION } from './types';
 import { DEFAULT_GLOBAL_SETTINGS } from './defaults';
 import { EMPTY_TREE_EDIT } from './treeEdit';
+import { t } from '@i18n';
 
 /**
  * A project exists from the very first second: it is simply empty (no shapes). That keeps every
@@ -9,7 +10,10 @@ import { EMPTY_TREE_EDIT } from './treeEdit';
  * imported, and the import only replaces the document and renames the project.
  */
 
-export const UNTITLED_PROJECT_NAME = 'Безымянный';
+/** Localised at the moment a project is created: a name, not a fixed label (ADR-0037). */
+export function untitledProjectName(): string {
+  return t('project.untitled');
+}
 
 function emptyRoot(name: string): SvgDocNode {
   return {
@@ -27,7 +31,7 @@ function emptyRoot(name: string): SvgDocNode {
   };
 }
 
-export function createEmptyDocument(fileName = UNTITLED_PROJECT_NAME): SvgDocument {
+export function createEmptyDocument(fileName = untitledProjectName()): SvgDocument {
   return {
     fileName,
     root: emptyRoot(fileName),
@@ -41,11 +45,12 @@ export function createEmptyDocument(fileName = UNTITLED_PROJECT_NAME): SvgDocume
 }
 
 export function createEmptyProject(): Project {
+  const fileName = untitledProjectName();
   return {
     version: PROJECT_VERSION,
-    fileName: UNTITLED_PROJECT_NAME,
+    fileName,
     source: '',
-    document: createEmptyDocument(),
+    document: createEmptyDocument(fileName),
     tree: EMPTY_TREE_EDIT,
     settings: {},
     global: {
